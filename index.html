@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Museu Virtual Interativo (A-Frame)</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+    <style>
+      .ui {
+        position: fixed; left: 12px; top: 12px; z-index: 10;
+        display: flex; gap: 8px; flex-wrap: wrap;
+        font-family: system-ui, Arial;
+      }
+      .ui button {
+        padding: 10px 12px; border: 0; border-radius: 10px;
+        background: #111; color: #fff; cursor: pointer;
+        box-shadow: 0 10px 25px rgba(0,0,0,.25);
+      }
+      .ui button.secondary { background: #444; }
+    </style>
+  </head>
+
+  <body>
+    <div class="ui">
+      <button id="btnStart">Iniciar visita</button>
+      <button id="btnPause" class="secondary">Pausar</button>
+      <button id="btnResume" class="secondary">Retomar</button>
+      <button id="btnStop" class="secondary">Sair</button>
+      <button id="btnHide" class="secondary">Esconder painel</button>
+    </div>
+
+    <!-- Stops da visita: edita pos/target à tua medida -->
+   <script type="application/json" id="tourStops">
+[
+  {
+    "pos": "-0.32 0.00 -10.56",
+    "rot": "-5.73 82.62 0",
+    "moveDur": 800,
+    "lookDur": 500,
+    "wait": 900,
+    "title": "Início",
+    "desc": "Ponto de partida da visita."
+  },
+  {
+    "pos": "-0.53 0.00 -11.73",
+    "rot": "4.58 0.11 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 1",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-1.39 0.00 -11.73",
+    "rot": "22.80 0.34 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 2",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-2.24 0.00 -11.73",
+    "rot": "10.31 0.34 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 3",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-3.52 0.00 -11.73",
+    "rot": "22.57 -6.19 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 4",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-3.52 0.00 -11.73",
+    "rot": "-2.75 -5.04 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 5",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-4.38 0.00 -11.73",
+    "rot": "-3.21 -10.89 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 6",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-4.38 0.00 -11.73",
+    "rot": "17.42 -9.05 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 7",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-5.55 0.00 -11.84",
+    "rot": "8.25 -0.57 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 8",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-6.41 0.00 -11.84",
+    "rot": "8.25 -0.57 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 9",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-7.15 0.00 -11.95",
+    "rot": "11.80 -0.69 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 10",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-8.22 0.00 -11.95",
+    "rot": "11.57 -1.49 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 11",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-8.21 0.00 -11.95",
+    "rot": "9.40 88.58 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 12",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-9.92 0.00 -10.99",
+    "rot": "25.21 85.60 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 13",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-9.92 0.00 -10.99",
+    "rot": "-6.30 87.09 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 14",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-14.19 0.00 -16.77",
+    "rot": "12.03 89.15 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 15",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-15.04 0.00 -16.45",
+    "rot": "11.92 91.90 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 16",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-16.11 0.00 -15.27",
+    "rot": "8.14 94.42 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 17",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-15.57 0.00 -16.34",
+    "rot": "9.05 0.69 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 18",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-14.93 0.00 -20.94",
+    "rot": "9.63 179.75 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 19",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-18.35 0.00 -20.94",
+    "rot": "9.63 179.75 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 20",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-20.80 0.00 -20.94",
+    "rot": "9.63 179.75 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 21",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-23.90 0.00 -20.94",
+    "rot": "9.63 179.75 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 22",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-28.92 0.00 -20.94",
+    "rot": "22.92 172.99 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 23",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-28.92 0.00 -20.94",
+    "rot": "-8.25 171.84 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 24",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-30.84 0.00 -20.94",
+    "rot": "-5.50 -178.42 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 25",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-30.84 0.00 -20.94",
+    "rot": "26.70 179.98 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 26",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-31.37 0.00 -21.90",
+    "rot": "5.27 1.95 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 27",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-36.49 0.00 -26.49",
+    "rot": "8.14 -179.34 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 28",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-37.67 0.00 -28.73",
+    "rot": "29.56 -177.16 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 29",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-40.12 0.00 -30.01",
+    "rot": "12.26 -176.70 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 30",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-40.34 0.00 -31.82",
+    "rot": "15.01 -3.21 0",
+    "moveDur": 1400,
+    "lookDur": 600,
+    "wait": 2200,
+    "title": "Quadro 31",
+    "desc": "Descrição do quadro (edita aqui)."
+  },
+  {
+    "pos": "-0.32 0.00 -10.56",
+    "rot": "-5.73 82.62 0",
+    "moveDur": 1600,
+    "lookDur": 500,
+    "wait": 1200,
+    "title": "Fim",
+    "desc": "A visita terminou. Podes explorar livremente."
+  }
+]
+</script>
+
+
+    <a-scene
+      renderer="colorManagement: true; physicallyCorrectLights: true"
+      background="color: #0b0b0f"
+    >
+      <a-assets>
+        <!-- Modelo -->
+        <a-asset-item id="museuGLB" src="models/museu.glb"></a-asset-item>
+
+        <!-- Áudios -->
+        <audio id="a1" src="assets/audio/narracao1.mp3"></audio>
+        <audio id="a2" src="assets/audio/narracao2.mp3"></audio>
+      </a-assets>
+
+      <!-- Luzes -->
+      <a-entity light="type: ambient; intensity: 0.9"></a-entity>
+      <a-entity light="type: directional; intensity: 1.1" position="2 6 3"></a-entity>
+      <a-entity light="type: directional; intensity: 0.6" position="-2 5 -3"></a-entity>
+
+      <!-- Modelo do museu (ajusta scale/rotation/position) -->
+      <a-entity
+        id="museuModel"
+        gltf-model="#museuGLB"
+        position="0 0 0"
+        rotation="0 0 0"
+        scale="0.01 0.01 0.01"
+      ></a-entity>
+
+      <!-- Hotspots (dá IDs para usar como target) -->
+      <a-sphere
+        id="q1Target"
+        class="hotspot"
+        position="-3 1.5 -4.8"
+        radius="0.08"
+        color="#ffffff"
+        hotspot="title: Obra 1; desc: Ajusta a posição deste hotspot para ficar em cima/ao lado da obra.; audio: #a1;"
+      ></a-sphere>
+
+      <a-sphere
+        id="q2Target"
+        class="hotspot"
+        position="3 1.5 -4.8"
+        radius="0.08"
+        color="#ffffff"
+        hotspot="title: Obra 2; desc: Ajusta a posição deste hotspot para outra obra.; audio: #a2;"
+      ></a-sphere>
+
+      <!-- RIG: move-se no tour e no WASD -->
+      <a-entity
+        id="rig"
+        position="0 0 3"
+        wasd-controls="acceleration: 35; enabled: true"
+        print-aim
+      >
+        <a-camera id="cam" position="0 1.6 0" look-controls="true">
+          <a-cursor raycaster="objects: .hotspot" fuse="false"></a-cursor>
+
+          <!-- Painel de info colado à câmara -->
+          <a-entity id="infoPanel" visible="false" position="0 -0.15 -1.35">
+            <a-plane width="2.8" height="1.25" color="#0f0f14" material="opacity: 0.92"></a-plane>
+
+            <a-entity
+              id="infoText"
+              position="0 0.35 0.01"
+              text="value: ; width: 2.55; color: #FFFFFF; wrapCount: 34; lineHeight: 55; align: center; anchor: center;"
+            ></a-entity>
+
+            <a-entity
+              id="hintText"
+              position="0 -0.45 0.01"
+              text="value: (clica num hotspot para detalhes); width: 2.55; color: #B7B7C7; wrapCount: 34; lineHeight: 55; align: center; anchor: center;"
+            ></a-entity>
+          </a-entity>
+
+          <a-entity id="narrator"></a-entity>
+        </a-camera>
+      </a-entity>
+
+      <!-- Controlador da visita -->
+      <a-entity
+        id="tour"
+        tour-guide="rig: #rig; panel: #infoPanel; text: #infoText; narrator: #narrator; stopsEl: #tourStops; speed: 1.0;"
+      ></a-entity>
+
+      <script>
+        // Botão extra: esconder painel
+        document.getElementById("btnHide").addEventListener("click", () => {
+          const panel = document.querySelector("#infoPanel");
+          panel.setAttribute("visible", false);
+          document.querySelector("#narrator").removeAttribute("sound");
+        });
+
+        // ✅ Imprime no Console: posição do rig + rotação da câmara + direção (forward)
+        // Tecla: P
+        AFRAME.registerComponent("print-aim", {
+          schema: { key: { type: "string", default: "p" } },
+          init: function () {
+            window.addEventListener("keydown", (e) => {
+              if (e.key.toLowerCase() !== this.data.key.toLowerCase()) return;
+
+              const rig = document.querySelector("#rig");
+              const cam = document.querySelector("#cam");
+              if (!rig || !cam) return;
+
+              const rp = rig.getAttribute("position");
+              const cr = cam.getAttribute("rotation");
+
+              const dir = new THREE.Vector3();
+              cam.object3D.getWorldDirection(dir);
+
+              console.log(
+                `RIG_POS: "${rp.x.toFixed(2)} ${rp.y.toFixed(2)} ${rp.z.toFixed(2)}"  ` +
+                `CAM_ROT: "${cr.x.toFixed(2)} ${cr.y.toFixed(2)} ${cr.z.toFixed(2)}"  ` +
+                `DIR: "${dir.x.toFixed(3)} ${dir.y.toFixed(3)} ${dir.z.toFixed(3)}"`
+              );
+            });
+          }
+        });
+
+        // Hotspot: clique -> mostra info + áudio
+        AFRAME.registerComponent("hotspot", {
+          schema: {
+            title: { type: "string" },
+            desc: { type: "string" },
+            audio: { type: "selector" }
+          },
+          init: function () {
+            const el = this.el;
+            el.addEventListener("click", () => {
+              const panel = document.querySelector("#infoPanel");
+              const text = document.querySelector("#infoText");
+              const narrator = document.querySelector("#narrator");
+
+              panel.setAttribute("visible", true);
+              text.setAttribute("text", "value", `${this.data.title}\n\n${this.data.desc}`);
+
+              if (this.data.audio) {
+                narrator.removeAttribute("sound");
+                narrator.setAttribute("sound", {
+                  src: this.data.audio,
+                  autoplay: true,
+                  positional: false,
+                  volume: 1.0
+                });
+              }
+            });
+
+            el.addEventListener("mouseenter", () => el.setAttribute("scale", "1.2 1.2 1.2"));
+            el.addEventListener("mouseleave", () => el.setAttribute("scale", "1 1 1"));
+          }
+        });
+
+        // Visita guiada: move até pos, depois roda para target, espera, segue
+        AFRAME.registerComponent("tour-guide", {
+          schema: {
+            rig: { type: "selector" },
+            panel: { type: "selector" },
+            text: { type: "selector" },
+            narrator: { type: "selector" },
+            stopsEl: { type: "selector" },
+            speed: { type: "number", default: 1.0 }
+          },
+
+          init: function () {
+            this.idx = 0;
+            this.running = false;
+            this.paused = false;
+            this.timers = [];
+            this.stops = this._readStops();
+
+            document.getElementById("btnStart").addEventListener("click", () => this.start());
+            document.getElementById("btnPause").addEventListener("click", () => this.pause());
+            document.getElementById("btnResume").addEventListener("click", () => this.resume());
+            document.getElementById("btnStop").addEventListener("click", () => this.stop());
+          },
+
+          _readStops: function () {
+            try {
+              const json = (this.data.stopsEl?.textContent || "").trim();
+              return json ? JSON.parse(json) : [];
+            } catch (e) {
+              console.warn("Erro a ler tourStops JSON:", e);
+              return [];
+            }
+          },
+
+          start: function () {
+            if (this.running) return;
+            this.running = true;
+            this.paused = false;
+            this.idx = 0;
+
+            // desliga movimento manual
+            this.data.rig.setAttribute("wasd-controls", "enabled: false");
+            this._goToStop(this.idx);
+          },
+
+          pause: function () {
+            if (!this.running || this.paused) return;
+            this.paused = true;
+
+            this._clearTimers();
+            this.data.rig.removeAttribute("animation__pos");
+            this.data.rig.removeAttribute("animation__rot");
+          },
+
+          resume: function () {
+            if (!this.running || !this.paused) return;
+            this.paused = false;
+            this._goToStop(this.idx);
+          },
+
+          stop: function () {
+            this.running = false;
+            this.paused = false;
+            this._clearTimers();
+
+            // reativa movimento manual
+            this.data.rig.setAttribute("wasd-controls", "enabled: true");
+
+            this.data.panel.setAttribute("visible", false);
+            this.data.narrator.removeAttribute("sound");
+          },
+
+          _clearTimers: function () {
+            this.timers.forEach((t) => clearTimeout(t));
+            this.timers = [];
+          },
+
+          _yawToTarget: function (rigEl, targetEl) {
+            const rigPos = new THREE.Vector3();
+            const tgtPos = new THREE.Vector3();
+            rigEl.object3D.getWorldPosition(rigPos);
+            targetEl.object3D.getWorldPosition(tgtPos);
+
+            const dx = tgtPos.x - rigPos.x;
+            const dz = tgtPos.z - rigPos.z;
+
+            const yawRad = Math.atan2(dx, dz);
+            const yawDeg = THREE.MathUtils.radToDeg(yawRad);
+
+            return `0 ${yawDeg} 0`;
+          },
+
+          _goToStop: function (i) {
+            if (!this.running || this.paused) return;
+
+            const stop = this.stops[i];
+            if (!stop) {
+              this.stop();
+              return;
+            }
+
+            const speed = this.data.speed || 1.0;
+
+            const moveDur = (stop.moveDur ?? 1500) / speed;
+            const lookDur = (stop.lookDur ?? 600) / speed;
+            const wait = (stop.wait ?? 1200) / speed;
+
+            // mover
+            if (stop.pos) {
+              this.data.rig.setAttribute("animation__pos", {
+                property: "position",
+                to: stop.pos,
+                dur: moveDur,
+                easing: "easeInOutQuad"
+              });
+            }
+
+            // ao chegar: texto/áudio + olhar
+            const t1 = setTimeout(() => {
+              if (!this.running || this.paused) return;
+
+              this.data.panel.setAttribute("visible", true);
+              this.data.text.setAttribute("text", "value", `${stop.title}\n\n${stop.desc}`);
+
+              if (stop.audio) {
+                this.data.narrator.removeAttribute("sound");
+                this.data.narrator.setAttribute("sound", {
+                  src: stop.audio,
+                  autoplay: true,
+                  positional: false,
+                  volume: 1.0
+                });
+              } else {
+                this.data.narrator.removeAttribute("sound");
+              }
+
+              if (stop.target) {
+                const targetEl = document.querySelector(stop.target);
+                if (targetEl) {
+                  const rot = this._yawToTarget(this.data.rig, targetEl);
+                  this.data.rig.setAttribute("animation__rot", {
+                    property: "rotation",
+                    to: rot,
+                    dur: lookDur,
+                    easing: "easeInOutQuad"
+                  });
+                }
+              }
+            }, moveDur);
+
+            // próximo stop
+            const t2 = setTimeout(() => {
+              if (!this.running || this.paused) return;
+              this.idx = i + 1;
+              this._goToStop(this.idx);
+            }, moveDur + lookDur + wait);
+
+            this.timers.push(t1, t2);
+          }
+        });
+      </script>
+    </a-scene>
+  </body>
+</html>
