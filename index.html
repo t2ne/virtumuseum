@@ -26,6 +26,9 @@
           <button id="btnEnterTour" class="secondary">
             Visita guiada (manual)
           </button>
+          <button id="btnFullscreenWelcome" class="secondary">
+            Fullscreen
+          </button>
         </div>
 
         <div class="welcome__opts">
@@ -52,7 +55,7 @@
 
         <div class="welcome__hint">
           Dica: <b>M</b> abre menu · <b>H</b> HUD on/off · <b>Q</b>/<b>E</b>
-          anterior/seguinte · visita guiada: clicar no chão = teleport
+          anterior/seguinte · visita guiada: usa ←/→ (ou Q/E)
         </div>
       </div>
     </div>
@@ -60,20 +63,6 @@
     <div class="ui is-hidden" id="uiRoot">
       <div class="ui__bar">
         <button id="btnMenu" class="secondary" title="Menu (M)">Menu</button>
-        <button
-          id="btnTourPrev"
-          class="secondary ui__tourBtn"
-          title="Anterior (←)"
-        >
-          ←
-        </button>
-        <button
-          id="btnTourNext"
-          class="secondary ui__tourBtn"
-          title="Seguinte (→)"
-        >
-          →
-        </button>
         <button
           id="btnStop"
           class="secondary"
@@ -84,12 +73,21 @@
         <button id="btnHUD" class="secondary" title="HUD on/off (H)">
           HUD
         </button>
+        <button id="btnFullscreen" class="secondary">Fullscreen</button>
       </div>
 
       <div class="ui__panel" id="menuPanel" aria-hidden="true">
         <div class="ui__panelHeader">
           <div class="ui__title">VirtuMuseum</div>
           <div class="ui__subtitle">Museu Virtual Interativo</div>
+        </div>
+
+        <div class="ui__section">
+          <div class="ui__buttons">
+            <button id="btnBackToWelcome" class="secondary">
+              Voltar ao ecrã inicial
+            </button>
+          </div>
         </div>
 
         <div class="ui__section">
@@ -112,11 +110,22 @@
           <div class="ui__sectionTitle">Experiência</div>
           <label class="ui__row">
             <input type="checkbox" id="chkReducedMotion" />
-            <span>Reduzir movimento (teleport)</span>
+            <span>Reduzir movimento (transições)</span>
           </label>
           <label class="ui__row ui__row--split">
             <span>Velocidade da visita</span>
             <input id="rngSpeed" type="range" min="50" max="150" value="100" />
+          </label>
+          <label class="ui__row ui__row--split">
+            <span>Zoom</span>
+            <input
+              id="rngZoom"
+              type="range"
+              min="30"
+              max="90"
+              step="1"
+              value="80"
+            />
           </label>
           <label class="ui__row ui__row--split">
             <span>Velocidade movimento</span>
@@ -160,6 +169,17 @@
         <div class="ui__section">
           <div class="ui__sectionTitle">Teleports (paragens)</div>
           <div id="stopsList" class="ui__list"></div>
+          <div class="ui__buttons">
+            <button id="btnSaveStopOverride" class="secondary">
+              Guardar pose nesta paragem
+            </button>
+            <button id="btnClearStopOverrides" class="secondary">
+              Limpar ajustes
+            </button>
+            <button id="btnCopyStopOverrides" class="secondary">
+              Copiar ajustes
+            </button>
+          </div>
         </div>
 
         <div class="ui__section">
@@ -196,8 +216,9 @@
             </button>
           </div>
           <div class="ui__hint">
-            Extra: <b>Q</b>/<b>E</b> anterior/seguinte · visita guiada: clicar
-            no chão = teleport · <b>C</b> foto · <b>F</b> lanterna
+            Extra: <b>Q</b>/<b>E</b> anterior/seguinte · <b>C</b> foto ·
+            <b>F</b>
+            lanterna
           </div>
         </div>
 
@@ -207,6 +228,23 @@
             <b>Space</b> pausa/retoma · <b>N</b> próxima · <b>Esc</b> parar
           </div>
         </div>
+      </div>
+
+      <div class="tourNav is-hidden" id="tourNav" aria-hidden="true">
+        <button
+          id="btnTourPrev"
+          class="secondary ui__tourBtn"
+          title="Anterior (←)"
+        >
+          ←
+        </button>
+        <button
+          id="btnTourNext"
+          class="secondary ui__tourBtn"
+          title="Seguinte (→)"
+        >
+          →
+        </button>
       </div>
     </div>
 
@@ -234,6 +272,7 @@
     </div>
 
     <a-scene
+      vr-mode-ui="enabled: false"
       renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true"
       background="color: #0b0b0f"
       fog="type: exponential; density: 0.015; color: #0b0b0f"
@@ -306,7 +345,7 @@
         position="-3 1.5 -4.8"
         radius="0.08"
         color="#ffffff"
-        hotspot="title: Obra 1; desc: Ajusta a posição deste hotspot para ficar em cima/ao lado da obra.;"
+        hotspot=""
       ></a-sphere>
 
       <a-sphere
@@ -315,7 +354,7 @@
         position="3 1.5 -4.8"
         radius="0.08"
         color="#ffffff"
-        hotspot="title: Obra 2; desc: Ajusta a posição deste hotspot para outra obra.;"
+        hotspot=""
       ></a-sphere>
 
       <!-- RIG: move-se no tour e no WASD -->

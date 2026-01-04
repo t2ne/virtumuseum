@@ -20,6 +20,12 @@ body {
   color: var(--txt);
 }
 
+/* Remove A-Frame injected VR/fullscreen UI (we provide our own). */
+.a-enter-vr,
+.a-enter-ar {
+  display: none !important;
+}
+
 .is-hidden {
   display: none !important;
 }
@@ -65,6 +71,17 @@ button:active {
   padding: 10px 0;
   font-size: 18px;
   line-height: 1;
+}
+
+.tourNav {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 14;
+  display: flex;
+  gap: 10px;
+  pointer-events: auto;
 }
 
 .ui__panel {
@@ -253,7 +270,7 @@ input:not([type]) {
 .infoCard {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: 74px;
   transform: translateX(-50%);
   z-index: 15;
   width: min(640px, calc(100vw - 24px));
@@ -312,4 +329,7 @@ input:not([type]) {
 }
 .ui.is-hud-off .ui__bar button:not(#btnHUD) {
   display: none;
+}
+.ui.is-hud-off .tourNav {
+  display: none !important;
 }
