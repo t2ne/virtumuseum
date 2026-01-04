@@ -9,3 +9,5 @@ dist/
 
 # OS / temp
 Thumbs.db
+
+*.pdf
