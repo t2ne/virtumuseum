@@ -186,7 +186,7 @@ AFRAME.registerComponent("gltf-material-fix", {
     doubleSided: { type: "boolean", default: true },
     baseColor: { type: "color", default: "#d9d9df" },
     roughness: { type: "number", default: 1.0 },
-    metalness: { type: "number", default: 0.0 }
+    metalness: { type: "number", default: 0.0 },
   },
   init: function () {
     this.el.addEventListener("model-loaded", () => {
@@ -197,7 +197,9 @@ AFRAME.registerComponent("gltf-material-fix", {
         node.castShadow = true;
         node.receiveShadow = true;
 
-        const mats = Array.isArray(node.material) ? node.material : [node.material];
+        const mats = Array.isArray(node.material)
+          ? node.material
+          : [node.material];
         mats.forEach((m) => {
           if (!m) return;
           if (this.data.doubleSided) m.side = THREE.DoubleSide;
@@ -220,7 +222,7 @@ AFRAME.registerComponent("gltf-material-fix", {
         });
       });
     });
-  }
+  },
 });
 
 AFRAME.registerComponent("print-aim", {
@@ -236,43 +238,54 @@ AFRAME.registerComponent("print-aim", {
       const dir = new THREE.Vector3();
       cam.object3D.getWorldDirection(dir);
       console.log(
-        `RIG_POS: "${rp.x.toFixed(2)} ${rp.y.toFixed(2)} ${rp.z.toFixed(2)}"  ` +
-          `CAM_ROT: "${cr.x.toFixed(2)} ${cr.y.toFixed(2)} ${cr.z.toFixed(2)}"  ` +
+        `RIG_POS: "${rp.x.toFixed(2)} ${rp.y.toFixed(2)} ${rp.z.toFixed(
+          2
+        )}"  ` +
+          `CAM_ROT: "${cr.x.toFixed(2)} ${cr.y.toFixed(2)} ${cr.z.toFixed(
+            2
+          )}"  ` +
           `DIR: "${dir.x.toFixed(3)} ${dir.y.toFixed(3)} ${dir.z.toFixed(3)}"`
       );
     });
-  }
+  },
 });
 
 AFRAME.registerComponent("hotspot", {
   schema: {
     title: { type: "string" },
     desc: { type: "string" },
-    audio: { type: "selector" }
+    audio: { type: "selector" },
   },
   init: function () {
     const el = this.el;
     el.addEventListener("click", async () => {
-      showInfoCard(this.data.title, this.data.desc, "(clica no chão para teleport · Q/E para snap-turn)");
+      showInfoCard(
+        this.data.title,
+        this.data.desc,
+        "(clica no chão para teleport · Q/E para snap-turn)"
+      );
 
       try {
         await audio.chime();
       } catch {}
 
-      if (this.data.audio && narrator) {
-        narrator.removeAttribute("sound");
-        narrator.setAttribute("sound", {
+      const narratorEl = document.querySelector("#narrator");
+      if (this.data.audio && narratorEl) {
+        narratorEl.removeAttribute("sound");
+        narratorEl.setAttribute("sound", {
           src: this.data.audio,
           autoplay: true,
           positional: false,
-          volume: 1.0
+          volume: 1.0,
         });
       }
     });
 
-    el.addEventListener("mouseenter", () => el.setAttribute("scale", "1.2 1.2 1.2"));
+    el.addEventListener("mouseenter", () =>
+      el.setAttribute("scale", "1.2 1.2 1.2")
+    );
     el.addEventListener("mouseleave", () => el.setAttribute("scale", "1 1 1"));
-  }
+  },
 });
 
 AFRAME.registerComponent("tour-guide", {
@@ -284,7 +297,7 @@ AFRAME.registerComponent("tour-guide", {
     stopsUrl: { type: "string", default: "src/data/tourStops.json" },
     stopsEl: { type: "selector" }, // fallback opcional
     autoAdvance: { type: "boolean", default: false },
-    speed: { type: "number", default: 1.0 }
+    speed: { type: "number", default: 1.0 },
   },
 
   init: function () {
@@ -295,7 +308,8 @@ AFRAME.registerComponent("tour-guide", {
     this.stops = [];
     this.reducedMotion = false;
     this.tts = false;
-    this._loadStops();
+    this.stopsLoaded = false;
+    this._stopsReady = this._loadStops();
     $("#btnStop")?.addEventListener("click", () => this.stop());
   },
 
@@ -322,15 +336,31 @@ AFRAME.registerComponent("tour-guide", {
       this.stops = this._readStopsFromDom();
     }
 
-    window.dispatchEvent(new CustomEvent("tour:stopsLoaded", { detail: { stops: this.stops } }));
+    this.stopsLoaded = true;
+
+    window.dispatchEvent(
+      new CustomEvent("tour:stopsLoaded", { detail: { stops: this.stops } })
+    );
   },
 
-  start: function () {
+  start: async function () {
     if (this.running) return;
     this.running = true;
     this.paused = false;
     this.idx = 0;
     this.data.rig?.setAttribute("wasd-controls", "enabled: false");
+
+    // Se o utilizador iniciar antes de carregar o JSON, espera aqui.
+    try {
+      await this._stopsReady;
+    } catch {}
+
+    if (!this.stops?.length) {
+      showToast("Visita: não foi possível carregar as paragens.");
+      this.stop();
+      return;
+    }
+
     this._goToStop(this.idx);
   },
 
@@ -374,6 +404,10 @@ AFRAME.registerComponent("tour-guide", {
   },
 
   teleportTo: function (i) {
+    if (!this.stopsLoaded) {
+      this._stopsReady?.then(() => this.teleportTo(i));
+      return;
+    }
     if (!this.stops[i]) return;
     this._clearTimers();
     this.idx = i;
@@ -406,7 +440,11 @@ AFRAME.registerComponent("tour-guide", {
 
   _applyPanel: function (stop) {
     // Mostra UI HTML (não tapa o ecrã como o painel 3D)
-    showInfoCard(stop.title, stop.desc, "Usa ← / → para navegar. (Esc termina a visita)");
+    showInfoCard(
+      stop.title,
+      stop.desc,
+      "Usa ← / → para navegar. (Esc termina a visita)"
+    );
     if (this.tts) speak(`${stop.title}. ${stop.desc}`);
   },
 
@@ -436,7 +474,7 @@ AFRAME.registerComponent("tour-guide", {
           property: "position",
           to: stop.pos,
           dur: moveDur,
-          easing: "easeInOutQuad"
+          easing: "easeInOutQuad",
         });
       }
     }
@@ -456,7 +494,7 @@ AFRAME.registerComponent("tour-guide", {
           src: stop.audio,
           autoplay: true,
           positional: false,
-          volume: 1.0
+          volume: 1.0,
         });
       } else {
         this.data.narrator?.removeAttribute("sound");
@@ -475,7 +513,7 @@ AFRAME.registerComponent("tour-guide", {
               property: "rotation",
               to: rot,
               dur: lookDur,
-              easing: "easeInOutQuad"
+              easing: "easeInOutQuad",
             });
           }
         }
@@ -489,7 +527,7 @@ AFRAME.registerComponent("tour-guide", {
             property: "rotation",
             to: stop.rot,
             dur: lookDur,
-            easing: "easeInOutQuad"
+            easing: "easeInOutQuad",
           });
         }
       }
@@ -509,7 +547,7 @@ AFRAME.registerComponent("tour-guide", {
     } else {
       this.timers.push(t1);
     }
-  }
+  },
 });
 
 AFRAME.registerComponent("teleport-surface", {
@@ -521,9 +559,12 @@ AFRAME.registerComponent("teleport-surface", {
       if (!rig || !p) return;
       // mantém y do rig (normalmente 0)
       const rp = rig.getAttribute("position");
-      rig.setAttribute("position", `${p.x.toFixed(3)} ${rp.y.toFixed(3)} ${p.z.toFixed(3)}`);
+      rig.setAttribute(
+        "position",
+        `${p.x.toFixed(3)} ${rp.y.toFixed(3)} ${p.z.toFixed(3)}`
+      );
     });
-  }
+  },
 });
 
 AFRAME.registerComponent("bounds-keeper", {
@@ -532,7 +573,7 @@ AFRAME.registerComponent("bounds-keeper", {
     maxX: { type: "number", default: 60 },
     minZ: { type: "number", default: -80 },
     maxZ: { type: "number", default: 80 },
-    y: { type: "number", default: 0 }
+    y: { type: "number", default: 0 },
   },
   init: function () {
     this.lastSafe = null;
@@ -564,7 +605,9 @@ AFRAME.registerComponent("bounds-keeper", {
     if (this.lastSafe) {
       el.setAttribute(
         "position",
-        `${this.lastSafe.x.toFixed(3)} ${this.lastSafe.y.toFixed(3)} ${this.lastSafe.z.toFixed(3)}`
+        `${this.lastSafe.x.toFixed(3)} ${this.lastSafe.y.toFixed(
+          3
+        )} ${this.lastSafe.z.toFixed(3)}`
       );
     } else {
       el.setAttribute("position", `0 ${this.data.y} 3`);
@@ -574,7 +617,7 @@ AFRAME.registerComponent("bounds-keeper", {
       this.lastWarn = now;
       showToast("Voltaste para dentro do museu (evitar 'vazio').");
     }
-  }
+  },
 });
 
 // ---------- UI wiring ----------
@@ -667,21 +710,27 @@ function setMode(mode) {
     museu?.setAttribute("visible", true);
     sky?.setAttribute("visible", false);
     vs?.setAttribute("visible", false);
-    try { $("#video360")?.pause?.(); } catch {}
+    try {
+      $("#video360")?.pause?.();
+    } catch {}
   }
 
   if (mode === "pano") {
     museu?.setAttribute("visible", false);
     sky?.setAttribute("visible", true);
     vs?.setAttribute("visible", false);
-    try { $("#video360")?.pause?.(); } catch {}
+    try {
+      $("#video360")?.pause?.();
+    } catch {}
   }
 
   if (mode === "video") {
     museu?.setAttribute("visible", false);
     sky?.setAttribute("visible", false);
     vs?.setAttribute("visible", true);
-    try { $("#video360")?.play?.(); } catch {}
+    try {
+      $("#video360")?.play?.();
+    } catch {}
   }
 }
 
@@ -722,12 +771,16 @@ function restore360Inputs() {
 
 function setupUI() {
   $("#btnMenu")?.addEventListener("click", toggleMenu);
-  $("#btnHUD")?.addEventListener("click", () => setMinimalHUD(!$("#uiRoot")?.classList.contains("is-minimal")));
+  $("#btnHUD")?.addEventListener("click", () =>
+    setMinimalHUD(!$("#uiRoot")?.classList.contains("is-minimal"))
+  );
 
   $("#btnInfoClose")?.addEventListener("click", () => hideInfoCard());
 
   // Welcome buttons
-  $("#btnEnterExplore")?.addEventListener("click", () => enterExperience("explore"));
+  $("#btnEnterExplore")?.addEventListener("click", () =>
+    enterExperience("explore")
+  );
   $("#btnEnterTour")?.addEventListener("click", () => enterExperience("tour"));
 
   // teleport por clique no chão
@@ -756,7 +809,9 @@ function setupUI() {
     if (!rig) return;
     const p = rig.getAttribute("position");
     const r = rig.getAttribute("rotation");
-    const text = `POS: "${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(2)}"  ROT: "${r.x.toFixed(2)} ${r.y.toFixed(2)} ${r.z.toFixed(2)}"`;
+    const text = `POS: "${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(
+      2
+    )}"  ROT: "${r.x.toFixed(2)} ${r.y.toFixed(2)} ${r.z.toFixed(2)}"`;
     console.log(text);
     try {
       await navigator.clipboard.writeText(text);
@@ -813,7 +868,7 @@ function setupUI() {
     tour?.setOptions?.({
       speed,
       reducedMotion: !!chkRM?.checked,
-      tts: !!chkTTS?.checked
+      tts: !!chkTTS?.checked,
     });
   };
   waitForTourComponent().then((c) => {
@@ -821,7 +876,9 @@ function setupUI() {
     applyTourOptions();
     // se as paragens já estavam carregadas, força a renderização da lista
     if (tour?.stops?.length) {
-      window.dispatchEvent(new CustomEvent("tour:stopsLoaded", { detail: { stops: tour.stops } }));
+      window.dispatchEvent(
+        new CustomEvent("tour:stopsLoaded", { detail: { stops: tour.stops } })
+      );
     }
   });
 
@@ -843,7 +900,8 @@ function setupUI() {
   const btnVoice = $("#btnVoice");
 
   if (!voice.supported) {
-    if (voiceStatus) voiceStatus.textContent = "Voz: indisponível neste browser";
+    if (voiceStatus)
+      voiceStatus.textContent = "Voz: indisponível neste browser";
     btnVoice?.setAttribute("disabled", "true");
   }
 
@@ -866,11 +924,12 @@ function setupUI() {
     const tourC = $("#tour")?.components?.["tour-guide"];
     if (!tourC) return;
 
-    if (t.includes("iniciar") || t.includes("comecar") || t.includes("começar")) tourC.start();
+    if (t.includes("iniciar") || t.includes("comecar")) tourC.start();
     else if (t.includes("pausar")) tourC.pause();
     else if (t.includes("retomar") || t.includes("continuar")) tourC.resume();
-    else if (t.includes("parar") || t.includes("sair") || t.includes("stop")) tourC.stop();
-    else if (t.includes("proxima") || t.includes("próxima") || t.includes("seguinte")) tourC.next();
+    else if (t.includes("parar") || t.includes("sair") || t.includes("stop"))
+      tourC.stop();
+    else if (t.includes("proxima") || t.includes("seguinte")) tourC.next();
     else if (t.includes("menu")) toggleMenu();
     else if (t.includes("ajuda")) showHelp();
     else if (t.includes("lanterna")) toggleFlashlight();
@@ -903,8 +962,17 @@ function setupUI() {
     if (!tourC) return;
 
     if (e.key === "m" || e.key === "M") toggleMenu();
-    if (e.key === "h" || e.key === "H") setMinimalHUD(!$("#uiRoot")?.classList.contains("is-minimal"));
+    if (e.key === "h" || e.key === "H")
+      setMinimalHUD(!$("#uiRoot")?.classList.contains("is-minimal"));
     if (e.key === "Escape") tourC.stop();
+
+    // iniciar / pausar / próxima (conforme UI/hints)
+    if (e.key === "Enter") tourC.start();
+    if (e.key === " " || e.code === "Space") {
+      if (tourC.running && !tourC.paused) tourC.pause();
+      else if (tourC.running && tourC.paused) tourC.resume();
+    }
+    if (e.key === "n" || e.key === "N") tourC.next();
 
     // navegação da visita manual
     if (e.key === "ArrowRight") tourC.next();
@@ -918,6 +986,20 @@ function setupUI() {
     if (e.key === "c" || e.key === "C") takePhoto();
     if (e.key === "f" || e.key === "F") toggleFlashlight();
   });
+
+  // binds (uma vez) — evita duplicação ao entrar/sair
+  $("#btnTourNext")?.addEventListener("click", () =>
+    $("#tour")?.components?.["tour-guide"]?.next?.()
+  );
+  $("#btnTourPrev")?.addEventListener("click", () =>
+    $("#tour")?.components?.["tour-guide"]?.prev?.()
+  );
+  $("#rngMoveSpeedMenu")?.addEventListener("input", (e) =>
+    setMoveSpeed(e.target.value)
+  );
+  $("#rngMoveSpeed")?.addEventListener("input", (e) =>
+    setMoveSpeed(e.target.value)
+  );
 
   // Primeira interação: se ambient estava on, tenta ligar aqui (autoplay policy)
   document.addEventListener(
@@ -937,13 +1019,15 @@ function setupUI() {
   toggleFlashlight(localStorage.getItem("virtumuseum.flashlight") === "1");
 
   // restore welcome opts
-  const ambientOn = localStorage.getItem("virtumuseum.ambient") === "1";
-  const ttsOn = localStorage.getItem("virtumuseum.tts") === "1";
-  const moveSpeed = Number(localStorage.getItem("virtumuseum.moveSpeed") || "10");
+  const moveSpeed = Number(
+    localStorage.getItem("virtumuseum.moveSpeed") || "10"
+  );
   $("#chkWelcomeAmbient") && ($("#chkWelcomeAmbient").checked = ambientOn);
   $("#chkWelcomeTTS") && ($("#chkWelcomeTTS").checked = ttsOn);
-  $("#rngMoveSpeed") && ($("#rngMoveSpeed").value = String(clamp(moveSpeed, 4, 20)));
-  $("#rngMoveSpeedMenu") && ($("#rngMoveSpeedMenu").value = String(clamp(moveSpeed, 4, 20)));
+  $("#rngMoveSpeed") &&
+    ($("#rngMoveSpeed").value = String(clamp(moveSpeed, 4, 20)));
+  $("#rngMoveSpeedMenu") &&
+    ($("#rngMoveSpeedMenu").value = String(clamp(moveSpeed, 4, 20)));
 
   restore360Inputs();
   setMenuOpen(false);
@@ -1026,24 +1110,17 @@ async function enterExperience(mode) {
 
   // Explorar: WASD on; Tour: WASD off e navega com setas
   if (mode === "explore") {
+    tour.stop();
     rig.setAttribute("wasd-controls", "enabled: true");
     updateTourNav(false);
     hideInfoCard();
     showToast("Exploração livre ativa.");
   } else {
     rig.setAttribute("wasd-controls", "enabled: false");
-    tour.running = false; // garante reset
+    tour.stop();
     tour.start();
     updateTourNav(true, tour.idx, tour.stops.length);
   }
-
-  // binds dos botões de tour nav
-  $("#btnTourNext")?.addEventListener("click", () => $("#tour")?.components?.["tour-guide"]?.next?.());
-  $("#btnTourPrev")?.addEventListener("click", () => $("#tour")?.components?.["tour-guide"]?.prev?.());
-
-  // menu move speed slider
-  $("#rngMoveSpeedMenu")?.addEventListener("input", (e) => setMoveSpeed(e.target.value));
-  $("#rngMoveSpeed")?.addEventListener("input", (e) => setMoveSpeed(e.target.value));
 }
 
 function showHelp() {
@@ -1063,5 +1140,3 @@ function showHelp() {
 window.addEventListener("DOMContentLoaded", () => {
   setupUI();
 });
-
-
