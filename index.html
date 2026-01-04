@@ -1,9 +1,10 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Museu Virtual Interativo (A-Frame)</title>
+    <link rel="icon" href="data:," />
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <link rel="stylesheet" href="src/css/style.css" />
   </head>
@@ -15,13 +16,16 @@
         <div class="welcome__brand">VirtuMuseum</div>
         <div class="welcome__title">Bem-vindo ao museu virtual</div>
         <div class="welcome__subtitle">
-          Escolhe como queres começar. Podes explorar livremente (WASD + rato) ou fazer uma visita guiada
+          Escolhe como queres começar. Podes explorar livremente (WASD + rato)
+          ou fazer uma visita guiada
           <b>manual</b> com setas para avançares ao teu ritmo.
         </div>
 
         <div class="welcome__buttons">
           <button id="btnEnterExplore">Explorar livremente</button>
-          <button id="btnEnterTour" class="secondary">Visita guiada (manual)</button>
+          <button id="btnEnterTour" class="secondary">
+            Visita guiada (manual)
+          </button>
         </div>
 
         <div class="welcome__opts">
@@ -35,12 +39,20 @@
           </label>
           <label class="ui__row ui__row--split">
             <span>Velocidade movimento</span>
-            <input id="rngMoveSpeed" type="range" min="4" max="20" value="10" />
+            <input
+              id="rngMoveSpeed"
+              type="range"
+              min="1"
+              max="6"
+              step="0.5"
+              value="2"
+            />
           </label>
         </div>
 
         <div class="welcome__hint">
-          Dica: <b>M</b> abre menu · <b>H</b> HUD minimal · <b>Q/E</b> snap-turn · clicar no chão = teleport
+          Dica: <b>M</b> abre menu · <b>H</b> HUD on/off · <b>Q</b>/<b>E</b>
+          anterior/seguinte · visita guiada: clicar no chão = teleport
         </div>
       </div>
     </div>
@@ -48,10 +60,30 @@
     <div class="ui is-hidden" id="uiRoot">
       <div class="ui__bar">
         <button id="btnMenu" class="secondary" title="Menu (M)">Menu</button>
-        <button id="btnTourPrev" class="secondary ui__tourBtn" title="Anterior (←)">←</button>
-        <button id="btnTourNext" class="secondary ui__tourBtn" title="Seguinte (→)">→</button>
-        <button id="btnStop" class="secondary" title="Terminar visita guiada (Esc)">Terminar visita</button>
-        <button id="btnHUD" class="secondary" title="HUD minimal (H)">HUD</button>
+        <button
+          id="btnTourPrev"
+          class="secondary ui__tourBtn"
+          title="Anterior (←)"
+        >
+          ←
+        </button>
+        <button
+          id="btnTourNext"
+          class="secondary ui__tourBtn"
+          title="Seguinte (→)"
+        >
+          →
+        </button>
+        <button
+          id="btnStop"
+          class="secondary"
+          title="Terminar visita guiada (Esc)"
+        >
+          Terminar visita
+        </button>
+        <button id="btnHUD" class="secondary" title="HUD on/off (H)">
+          HUD
+        </button>
       </div>
 
       <div class="ui__panel" id="menuPanel" aria-hidden="true">
@@ -88,7 +120,14 @@
           </label>
           <label class="ui__row ui__row--split">
             <span>Velocidade movimento</span>
-            <input id="rngMoveSpeedMenu" type="range" min="4" max="20" value="10" />
+            <input
+              id="rngMoveSpeedMenu"
+              type="range"
+              min="1"
+              max="6"
+              step="0.5"
+              value="2"
+            />
           </label>
         </div>
 
@@ -101,11 +140,17 @@
           </div>
           <label class="ui__row ui__row--stack">
             <span>URL panorama (jpg/png)</span>
-            <input id="txtPanoUrl" placeholder="ex: src/assets/images/panorama.jpg" />
+            <input
+              id="txtPanoUrl"
+              placeholder="ex: src/assets/images/panorama.jpg"
+            />
           </label>
           <label class="ui__row ui__row--stack">
             <span>URL vídeo 360 (mp4)</span>
-            <input id="txtVideoUrl" placeholder="ex: src/assets/video/video360.mp4" />
+            <input
+              id="txtVideoUrl"
+              placeholder="ex: src/assets/video/video360.mp4"
+            />
           </label>
           <div class="ui__buttons">
             <button id="btnApply360" class="secondary">Aplicar</button>
@@ -129,32 +174,63 @@
         <div class="ui__section">
           <div class="ui__sectionTitle">Ferramentas</div>
           <div class="ui__buttons">
-            <button id="btnPhoto" class="secondary" title="Foto (C)">Foto</button>
-            <button id="btnFlashlight" class="secondary" title="Lanterna (F)">Lanterna</button>
-            <button id="btnReset" class="secondary" title="Reset posição/rotação">Reset</button>
-            <button id="btnCopyPose" class="secondary" title="Copiar pos/rot atuais">Copiar pose</button>
+            <button id="btnPhoto" class="secondary" title="Foto (C)">
+              Foto
+            </button>
+            <button id="btnFlashlight" class="secondary" title="Lanterna (F)">
+              Lanterna
+            </button>
+            <button
+              id="btnReset"
+              class="secondary"
+              title="Reset posição/rotação"
+            >
+              Reset
+            </button>
+            <button
+              id="btnCopyPose"
+              class="secondary"
+              title="Copiar pos/rot atuais"
+            >
+              Copiar pose
+            </button>
           </div>
           <div class="ui__hint">
-            Extra: <b>Q</b>/<b>E</b> snap-turn · clicar no chão = teleport · <b>C</b> foto · <b>F</b> lanterna
+            Extra: <b>Q</b>/<b>E</b> anterior/seguinte · visita guiada: clicar
+            no chão = teleport · <b>C</b> foto · <b>F</b> lanterna
           </div>
         </div>
 
         <div class="ui__section ui__section--foot">
           <div class="ui__hint">
-            Atalhos: <b>M</b> menu · <b>Enter</b> iniciar · <b>Space</b> pausa/retoma · <b>N</b> próxima · <b>Esc</b> parar
+            Atalhos: <b>M</b> menu · <b>Enter</b> iniciar ·
+            <b>Space</b> pausa/retoma · <b>N</b> próxima · <b>Esc</b> parar
           </div>
         </div>
       </div>
     </div>
 
     <!-- Info card (HTML) -->
-    <div class="infoCard is-hidden" id="infoCard" role="dialog" aria-live="polite">
+    <div
+      class="infoCard is-hidden"
+      id="infoCard"
+      role="dialog"
+      aria-live="polite"
+    >
       <div class="infoCard__top">
         <div class="infoCard__title" id="infoCardTitle">—</div>
-        <button class="infoCard__close secondary" id="btnInfoClose" title="Fechar">Fechar</button>
+        <button
+          class="infoCard__close secondary"
+          id="btnInfoClose"
+          title="Fechar"
+        >
+          Fechar
+        </button>
       </div>
       <div class="infoCard__desc" id="infoCardDesc"></div>
-      <div class="infoCard__hint" id="infoCardHint">Dica: usa ← / → para navegar na visita.</div>
+      <div class="infoCard__hint" id="infoCardHint">
+        Dica: usa ← / → para navegar na visita.
+      </div>
     </div>
 
     <a-scene
@@ -165,17 +241,34 @@
     >
       <a-assets>
         <!-- Modelo -->
-        <a-asset-item id="museuGLB" src="src/assets/models/museu.glb"></a-asset-item>
+        <a-asset-item
+          id="museuGLB"
+          src="src/assets/models/museu.glb"
+        ></a-asset-item>
 
         <!-- Media 360 (opcional) -->
         <img id="panoImg" src="" />
-        <video id="video360" src="" crossorigin="anonymous" playsinline webkit-playsinline></video>
+        <video
+          id="video360"
+          src=""
+          crossorigin="anonymous"
+          playsinline
+          webkit-playsinline
+        ></video>
       </a-assets>
 
       <!-- Luzes -->
-      <a-entity light="type: ambient; intensity: 0.85; color: #ffffff"></a-entity>
-      <a-entity light="type: directional; intensity: 1.0; castShadow: true" position="2 6 3"></a-entity>
-      <a-entity light="type: directional; intensity: 0.55; castShadow: true" position="-2 5 -3"></a-entity>
+      <a-entity
+        light="type: ambient; intensity: 0.85; color: #ffffff"
+      ></a-entity>
+      <a-entity
+        light="type: directional; intensity: 1.0; castShadow: true"
+        position="2 6 3"
+      ></a-entity>
+      <a-entity
+        light="type: directional; intensity: 0.55; castShadow: true"
+        position="-2 5 -3"
+      ></a-entity>
 
       <!-- Modelo do museu (ajusta scale/rotation/position) -->
       <a-entity
@@ -200,7 +293,11 @@
 
       <!-- Modo 360: sky / videosphere (inicialmente escondidos) -->
       <a-sky id="sky360" visible="false" color="#101018"></a-sky>
-      <a-videosphere id="videoSphere" visible="false" src="#video360"></a-videosphere>
+      <a-videosphere
+        id="videoSphere"
+        visible="false"
+        src="#video360"
+      ></a-videosphere>
 
       <!-- Hotspots (dá IDs para usar como target) -->
       <a-sphere
@@ -225,12 +322,15 @@
       <a-entity
         id="rig"
         position="0 0 3"
-        wasd-controls="acceleration: 10; enabled: false; fly: false"
+        wasd-controls="acceleration: 2; enabled: false; fly: false"
         bounds-keeper="minX: -60; maxX: 60; minZ: -80; maxZ: 80; y: 0"
         print-aim
       >
-        <a-camera id="cam" position="0 1.6 0" look-controls="true">
-          <a-cursor raycaster="objects: .hotspot, .teleportable" fuse="false"></a-cursor>
+        <a-camera id="cam" position="0 1.6 0" look-controls="enabled: true">
+          <a-cursor
+            raycaster="objects: .hotspot, .teleportable"
+            fuse="false"
+          ></a-cursor>
 
           <!-- Lanterna (toggle no menu/tecla F) -->
           <a-entity
@@ -241,7 +341,12 @@
 
           <!-- Painel de info colado à câmara -->
           <a-entity id="infoPanel" visible="false" position="0 -0.22 -1.85">
-            <a-plane width="2.2" height="0.9" color="#0f0f14" material="opacity: 0.88"></a-plane>
+            <a-plane
+              width="2.2"
+              height="0.9"
+              color="#0f0f14"
+              material="opacity: 0.88"
+            ></a-plane>
 
             <a-entity
               id="infoText"
