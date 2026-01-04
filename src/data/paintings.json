@@ -1,0 +1,458 @@
+{
+  "paintings": [
+    {
+      "code": "001",
+      "title": "A Ronda Noturna",
+      "author": "Rembrandt",
+      "year": "1642",
+      "materials": "Óleo sobre tela",
+      "description": "Uma das obras mais famosas de Rembrandt, representando a milícia de Amsterdã.",
+      "history": "Pintada em 1642, esta obra é conhecida por seu uso dramático de luz e sombra.",
+      "symbolism": "Simboliza a vigilância e o dever cívico.",
+      "type":"Barroco"
+    },
+    {
+      "code": "002",
+      "title": "O Rapto das Sabinas",
+      "author": "Nicolas Poussin",
+      "year": "1637",
+      "materials": "Óleo sobre tela",
+      "description": "Representa o episódio lendário do rapto das mulheres sabinas pelos romanos.",
+      "history": "Poussin pintou esta obra em 1637, explorando temas clássicos e composição equilibrada.",
+      "symbolism": "Reflete sobre a fundação de Roma e os conflitos entre culturas.",
+      "type":"Barroco"
+    },
+    {
+      "code": "003",
+      "title": "Judite Decapitando Holofernes",
+      "author": "Artemisia Gentileschi",
+      "year": "1614–20",
+      "materials": "Óleo sobre tela",
+      "description": "Uma representação intensa do momento em que Judite decapita Holofernes.",
+      "history": "Gentileschi pintou várias versões deste tema, destacando a força feminina.",
+      "symbolism": "Simboliza a justiça e a coragem diante da opressão.",
+      "type":"Barroco"
+    },
+    {
+      "code": "004",
+      "title": "As Meninas",
+      "author": "Diego Velázquez",
+      "year": "1656",
+      "materials": "Óleo sobre tela",
+      "description": "Uma complexa cena de corte que desafia as percepções do observador.",
+      "history": "Pintada em 1656, é uma das obras mais analisadas da história da arte ocidental.",
+      "symbolism": "Explora temas de realidade e ilusão na arte.",
+      "type":"Barroco"
+    },
+    {
+      "code": "005",
+      "title": "A Vocação de São Mateus",
+      "author": "Caravaggio",
+      "year": "1599–1600",
+      "materials": "Óleo sobre tela",
+      "description": "Mostra o momento em que Jesus chama Mateus para segui-lo.",
+      "history": "Uma das obras-primas de Caravaggio, destacando seu uso dramático de luz.",
+      "symbolism": "Representa a chamada divina e a transformação espiritual.",
+      "type":"Barroco"
+    },
+    {
+      "code": "006",
+      "title": "São Jerônimo em Meditação",
+      "author": "Caravaggio",
+      "year": "1605",
+      "materials": "Óleo sobre tela",
+      "description": "Retrata São Jerônimo em um momento de contemplação.",
+      "history": "Pintada em 1605, exemplifica o estilo tenebrista de Caravaggio.",
+      "symbolism": "Simboliza a penitência e a busca por sabedoria.",
+      "type":"Barroco"
+    },
+    {
+      "code": "007",
+      "title": "O Triunfo de Baco",
+      "author": "Diego Velázquez",
+      "year": "1628–1629",
+      "materials": "Óleo sobre tela",
+      "description": "Mostra o deus Baco coroando um soldado com uma coroa de videira.",
+      "history": "Também conhecida como 'Os Bêbados', foi pintada por Velázquez no início de sua carreira.",
+      "symbolism": "Explora a dualidade entre o divino e o mundano.",
+      "type":"Barroco"
+    },
+    {
+      "code": "008",
+      "title": "O Êxtase de Santa Teresa",
+      "author": "Gian Lorenzo Bernini",
+      "year": "1647–1652",
+      "materials": "Escultura em mármore",
+      "description": "Uma escultura que captura o momento místico de Santa Teresa.",
+      "history": "Criada por Bernini, é uma das obras-primas da escultura barroca.",
+      "symbolism": "Representa a união espiritual com o divino.",
+      "type":"Barroco"
+    },
+    {
+      "code": "009",
+      "title": "Susana e os Anciãos",
+      "author": "Rembrandt",
+      "year": "1647",
+      "materials": "Óleo sobre tela",
+      "description": "Retrata a história bíblica de Susana sendo observada por anciãos.",
+      "history": "Pintada por Rembrandt, destaca a vulnerabilidade e a injustiça.",
+      "symbolism": "Simboliza a castidade e a injustiça enfrentada pelas mulheres.",
+      "type":"Barroco"
+    },
+    {
+      "code": "010",
+      "title": "O Banquete de Baltazar",
+      "author": "Rembrandt",
+      "year": "1635",
+      "materials": "Óleo sobre tela",
+      "description": "Mostra o rei Baltazar durante um banquete interrompido por uma mensagem divina.",
+      "history": "Rembrandt capturou o momento de surpresa e terror do rei.",
+      "symbolism": "Reflete sobre a soberba e o julgamento divino."
+      ,
+      "type":"Barroco"
+    },
+    
+
+
+
+
+    {
+      "code": "011",
+      "title": "A Liberdade Guiando o Povo",
+      "author": "Eugène Delacroix",
+      "year": "1830",
+      "materials": "Óleo sobre tela",
+      "description": "Uma das obras mais emblemáticas do Romantismo, mostrando a liberdade personificada liderando o povo francês em uma revolução.",
+      "history": "Pintada em 1830, esta obra se tornou um ícone da Revolução Francesa e da luta pela liberdade.",
+      "symbolism": "A liberdade é representada como uma figura feminina, conduzindo os revolucionários para a vitória.",
+      "type":"Romantismo "
+    },
+    {
+      "code": "012",
+      "title": "O Naufrágio da Medusa",
+      "author": "Théodore Géricault",
+      "year": "1819",
+      "materials": "Óleo sobre tela",
+      "description": "Representa o dramático naufrágio de um navio francês, com os sobreviventes lutando por suas vidas em uma balsa improvisada.",
+      "history": "Pintada em 1819, esta obra é considerada uma das mais importantes do Romantismo, conhecida pela sua representação realista e emocional.",
+      "symbolism": "A cena retrata a desesperança e a luta pela sobrevivência, refletindo as tragédias humanas.",
+      "type":"Romantismo "
+    },
+    {
+      "code": "013",
+      "title": "O Pesadelo",
+      "author": "Henry Fuseli",
+      "year": "1781",
+      "materials": "Óleo sobre tela",
+      "description": "Uma representação surreal de um pesadelo, com uma figura feminina deitada enquanto um demônio a observa.",
+      "history": "Pintada em 1781, esta obra foi uma das primeiras a explorar o tema do pesadelo e o inconsciente.",
+      "symbolism": "Simboliza os medos internos e as forças sombrias do inconsciente humano.",
+      "type":"Romantismo "
+    },
+    {
+      "code": "014",
+      "title": "Viagem ao Mar de Gelo",
+      "author": "Caspar David Friedrich",
+      "year": "1824",
+      "materials": "Óleo sobre tela",
+      "description": "A obra mostra uma viagem de barco através de uma paisagem congelada e desolada, típica das cenas românticas de Friedrich.",
+      "history": "Pintada em 1824, a obra é um exemplo do estilo único de Friedrich, focado em vastas paisagens e sentimentos de solidão.",
+      "symbolism": "Representa a luta do ser humano contra a natureza, além de simbolizar a busca por respostas em um mundo vasto e misterioso.",
+      "type":"Romantismo "
+    },
+    {
+      "code": "015",
+      "title": "Caminhante sobre o Mar de Névoa",
+      "author": "Caspar David Friedrich",
+      "year": "1818",
+      "materials": "Óleo sobre tela",
+      "description": "Mostra um homem em um penhasco, olhando para uma paisagem envolta em névoa, representando a sublime beleza da natureza.",
+      "history": "Criada em 1818, esta obra é uma das mais famosas de Friedrich e simboliza a interação entre o homem e a natureza.",
+      "symbolism": "O caminhante simboliza o ser humano em sua busca espiritual e a natureza como um vasto e incompreensível mistério.",
+      "type":"Romantismo "
+    },
+    {
+      "code": "016",
+      "title": "A Morte de Sardanápalo",
+      "author": "Eugène Delacroix",
+      "year": "1827",
+      "materials": "Óleo sobre tela",
+      "description": "Retrata a morte do rei assírio Sardanápalo, que, antes de ser capturado, ordenou a destruição de tudo ao seu redor.",
+      "history": "Pintada em 1827, a obra é um exemplo da habilidade de Delacroix em representar a violência e a emoção.",
+      "symbolism": "Simboliza a decadência de um império e a desesperança diante do fim inevitável.",
+      "type":"Romantismo "
+    },
+    {
+      "code": "017",
+      "title": "Monge à Beira-Mar",
+      "author": "Caspar David Friedrich",
+      "year": "1808–1810",
+      "materials": "Óleo sobre tela",
+      "description": "Uma figura solitária de um monge olhando para o vasto mar, um tema comum em muitas obras de Friedrich.",
+      "history": "Criada entre 1808 e 1810, a obra transmite sentimentos de solidão e introspecção.",
+      "symbolism": "Representa a contemplação espiritual e a busca interior através da observação da natureza.",
+      "type":"Romantismo "
+    },
+    {
+      "code": "018",
+      "title": "A Tempestade de Neve",
+      "author": "J.M.W. Turner",
+      "year": "1842",
+      "materials": "Óleo sobre tela",
+      "description": "A obra retrata um navio lutando contra uma feroz tempestade de neve, um exemplo do domínio de Turner sobre as forças da natureza.",
+      "history": "Pintada em 1842, esta obra demonstra o talento de Turner para capturar o poder destrutivo da natureza.",
+      "symbolism": "A tempestade simboliza as forças incontroláveis da natureza e a vulnerabilidade humana.",
+      "type":"Romantismo "
+    },
+    {
+      "code": "019",
+      "title": "Chuva, Vapor e Velocidade",
+      "author": "J.M.W. Turner",
+      "year": "1844",
+      "materials": "Óleo sobre tela",
+      "description": "A obra mostra um trem a vapor atravessando uma ponte, simbolizando o progresso e a revolução industrial.",
+      "history": "Pintada em 1844, a obra é uma das mais representativas de Turner, focando na dinâmica da modernidade.",
+      "symbolism": "Simboliza a ascensão da indústria e o impacto da revolução industrial na sociedade.",
+      "type":"Romantismo "
+    },
+    
+    {
+      "code": "020",
+      "title": "Os Saltimbancos",
+      "author": "Gustave Doré",
+      "year": "1874",
+      "materials": "Óleo sobre tela",
+      "description": "Uma obra que retrata um grupo de artistas de rua realizando um espetáculo, capturando a energia e a vitalidade do momento.",
+      "history": "Pintada em 1874, Doré explorou temas de figuras marginalizadas e a vida boêmia nas ruas.",
+      "symbolism": "Representa a liberdade de expressão e a vida no limite da sociedade."
+      ,
+      "type":"Romantismo "
+    },
+
+    {
+      "code": "021",
+      "title": "Les Demoiselles d'Avignon",
+      "author": "Pablo Picasso",
+      "year": "1907",
+      "materials": "Óleo sobre tela",
+      "description": "Uma das primeiras obras cubistas, representando cinco mulheres nuas com formas geométricas e ângulos abruptos.",
+      "history": "Pintada em 1907, esta obra é considerada um marco no desenvolvimento do Cubismo, desafiando as convenções da arte tradicional.",
+      "symbolism": "A desconstrução das formas humanas representa uma nova abordagem da percepção da realidade.",
+      "type":"Cubismo "
+    },
+    {
+      "code": "022",
+      "title": "Guernica",
+      "author": "Pablo Picasso",
+      "year": "1937",
+      "materials": "Óleo sobre tela",
+      "description": "Uma pintura monumental que retrata o bombardeio da cidade basca de Guernica durante a Guerra Civil Espanhola.",
+      "history": "Criada em 1937 em resposta ao ataque aéreo a Guernica, esta obra se tornou um poderoso símbolo contra a violência e a guerra.",
+      "symbolism": "A dor, o caos e a destruição da guerra são expressos através de figuras distorcidas e decompostas.",
+      "type":"Cubismo "
+    },
+    {
+      "code": "023",
+      "title": "A Garrafa de Vinho",
+      "author": "Juan Gris",
+      "year": "1913",
+      "materials": "Óleo sobre tela",
+      "description": "Uma obra cubista que representa uma garrafa de vinho, retratada de maneira geométrica e analítica.",
+      "history": "Pintada em 1913, esta obra de Juan Gris é um exemplo clássico do Cubismo Sintético, com foco na representação da vida cotidiana.",
+      "symbolism": "A decomposição da forma na pintura reflete a busca de Gris por representar a realidade de uma maneira fragmentada e analítica.",
+      "type":"Cubismo "
+    },
+    {
+      "code": "024",
+      "title": "O Violino e o Candelabro",
+      "author": "Georges Braque",
+      "year": "1910",
+      "materials": "Óleo sobre tela",
+      "description": "Uma obra cubista que desconstrói a forma de um violino e um candelabro, representando objetos cotidianos de forma abstrata.",
+      "history": "Criada em 1910, a obra é uma das primeiras a explorar o Cubismo Analítico, focando na decomposição da forma.",
+      "symbolism": "A fragmentação dos objetos reflete a ideia de representar a realidade a partir de diferentes perspectivas.",
+      "type":"Cubismo "
+    },
+    {
+      "code": "025",
+      "title": "Mulher com Mandolina",
+      "author": "Georges Braque",
+      "year": "1910",
+      "materials": "Óleo sobre tela",
+      "description": "Uma figura feminina tocando uma mandolina, representada em formas geométricas características do Cubismo.",
+      "history": "Pintada em 1910, a obra de Braque explora a desconstrução da figura humana e a integração da música com a arte visual.",
+      "symbolism": "A figura feminina e o instrumento musical são apresentados de forma abstrata, simbolizando a fusão entre arte e som.",
+      "type":"Cubismo "
+    },
+    {
+      "code": "026",
+      "title": "Retrato de Pablo Picasso",
+      "author": "Juan Gris",
+      "year": "1912",
+      "materials": "Óleo sobre tela",
+      "description": "Um retrato cubista de Pablo Picasso, utilizando formas geométricas e uma paleta de cores discretas.",
+      "history": "Pintado em 1912, este retrato de Picasso é uma das representações mais conhecidas do Cubismo Sintético, desenvolvido por Gris.",
+      "symbolism": "A representação de Picasso através de formas fragmentadas e múltiplas perspectivas reflete o caráter multifacetado do artista.",
+      "type":"Cubismo "
+    },
+    {
+      "code": "027",
+      "title": "O Poeta",
+      "author": "Pablo Picasso",
+      "year": "1911",
+      "materials": "Óleo sobre tela",
+      "description": "Uma obra cubista que retrata um poeta, com elementos fragmentados e múltiplas perspectivas sobre o rosto e os objetos ao redor.",
+      "history": "Criada em 1911, esta pintura reflete o uso de formas geométricas e a busca por representar o sujeito de uma maneira não linear.",
+      "symbolism": "A fusão do poeta com o ambiente ao seu redor simboliza a relação íntima entre o artista e sua obra.",
+      "type":"Cubismo "
+    },
+    {
+      "code": "028",
+      "title": "O Leitor",
+      "author": "Fernand Léger",
+      "year": "1924",
+      "materials": "Óleo sobre tela",
+      "description": "Um retrato de um homem lendo, com formas simplificadas e cores vibrantes, características do estilo de Léger.",
+      "history": "Pintada em 1924, a obra de Léger explora o uso de formas plásticas e cores contrastantes, afastando-se do Cubismo mais analítico.",
+      "symbolism": "A ênfase nas formas simples e no uso de cores vibrantes simboliza a busca por uma nova forma de expressão artística.",
+      "type":"Cubismo "
+    },
+    {
+      "code": "029",
+      "title": "Natureza Morta com Cadeira de Palha",
+      "author": "Pablo Picasso",
+      "year": "1912",
+      "materials": "Óleo sobre tela",
+      "description": "Uma das primeiras obras cubistas a combinar a colagem com a pintura, representando uma cadeira de palha e outros objetos.",
+      "history": "Criada em 1912, esta obra de Picasso é um marco na transição do Cubismo Analítico para o Cubismo Sintético, utilizando elementos de collage.",
+      "symbolism": "A combinação de elementos tridimensionais e bidimensionais simboliza a tentativa de aproximar a arte da realidade física.",
+      "type":"Cubismo "
+    },
+    {
+      "code": "030",
+      "title": "A Cidade",
+      "author": "Fernand Léger",
+      "year": "1919",
+      "materials": "Óleo sobre tela",
+      "description": "Uma obra cubista que retrata a vida urbana e a modernidade, com formas geométricas e uma paleta de cores primárias.",
+      "history": "Pintada em 1919, a obra de Léger reflete o impacto da vida moderna e industrial na arte do pós-guerra.",
+      "symbolism": "As formas geométricas e a paleta de cores simbolizam a racionalização e a mecanização da vida urbana.",
+      "type":"Cubismo "
+    },
+
+    {
+      "code": "031",
+      "title": "Impressão, Nascer do Sol",
+      "author": "Claude Monet",
+      "year": "1872",
+      "materials": "Óleo sobre tela",
+      "description": "Esta obra é famosa por ter dado nome ao movimento Impressionista, retratando o nascer do sol no porto de Le Havre.",
+      "history": "Pintada em 1872, a obra foi criticada inicialmente, mas acabou por ser um marco para a revolução na pintura que rejeitava os estilos tradicionais.",
+      "symbolism": "A técnica de pinceladas rápidas e o uso de cores vibrantes refletem a efemeridade da luz e da atmosfera.",
+      "type":"Impressionismo  "
+    },
+    {
+      "code": "032",
+      "title": "Campo de Papoulas",
+      "author": "Claude Monet",
+      "year": "1873",
+      "materials": "Óleo sobre tela",
+      "description": "Monet capturou um campo de papoulas florescendo, utilizando pinceladas soltas e cores brilhantes, características do Impressionismo.",
+      "history": "Criada em 1873, a pintura reflete a busca de Monet por capturar a luz natural e a atmosfera de um campo de flores.",
+      "symbolism": "A suavidade das cores e as pinceladas expressam a transitoriedade da paisagem e a beleza fugaz da natureza.",
+      "type":"Impressionismo  "
+    },
+    {
+      "code": "033",
+      "title": "O Almoço na Relva",
+      "author": "Édouard Manet",
+      "year": "1863",
+      "materials": "Óleo sobre tela",
+      "description": "Esta pintura retrata uma cena ousada e moderna, com uma mulher nua sentada ao lado de dois homens, algo controverso para a época.",
+      "history": "Pintada em 1863, a obra foi exibida no Salão dos Refusados, sendo uma das pioneiras do movimento Impressionista.",
+      "symbolism": "A obra desafia as convenções da arte clássica, ao misturar cenas cotidianas com uma sensualidade moderna e desafiadora.",
+      "type":"Impressionismo  "
+    },
+    {
+      "code": "034",
+      "title": "A Aula de Dança",
+      "author": "Edgar Degas",
+      "year": "1874",
+      "materials": "Óleo sobre tela",
+      "description": "Degas capturou uma aula de balé, mostrando a tensão e os movimentos das dançarinas, com uma perspectiva inovadora.",
+      "history": "Criada em 1874, a obra foi exibida no primeiro grupo impressionista e é um exemplo de sua habilidade em capturar a dinâmica do movimento.",
+      "symbolism": "A representação do movimento e da energia reflete o desejo de Degas de mostrar a vida moderna em constante mudança.",
+      "type":"Impressionismo  "
+    },
+    {
+      "code": "035",
+      "title": "O Balcão",
+      "author": "Édouard Manet",
+      "year": "1868",
+      "materials": "Óleo sobre tela",
+      "description": "Manet retratou figuras em um balcão de um café, capturando a vida social urbana e desafiando a convenção da pintura tradicional.",
+      "history": "Pintada em 1868, esta obra foi um marco na arte moderna, representando uma cena cotidiana com um estilo audacioso e direto.",
+      "symbolism": "A pintura quebra as barreiras entre a arte de galeria e a vida cotidiana, refletindo a modernidade e a vida urbana.",
+      "type":"Impressionismo  "
+    },
+    {
+      "code": "036",
+      "title": "O Lago das Ninféias",
+      "author": "Claude Monet",
+      "year": "1916",
+      "materials": "Óleo sobre tela",
+      "description": "Uma das últimas obras de Monet, onde ele explorou a superfície da água do seu jardim com uma técnica impressionista de pinceladas soltas.",
+      "history": "Criada em 1916, a série das Ninféias é uma das mais conhecidas do artista e reflete sua obsessão com a luz e a água.",
+      "symbolism": "A tranquilidade da água e as cores suaves expressam a busca por uma representação da natureza como um espaço emocional e sensorial.",
+      "type":"Impressionismo  "
+    },
+    {
+      "code": "037",
+      "title": "Mulher com Sombrinha",
+      "author": "Claude Monet",
+      "year": "1875",
+      "materials": "Óleo sobre tela",
+      "description": "Uma mulher passeando sob uma sombrinha, pintada ao ar livre, capturando a luz e o movimento de maneira impressionista.",
+      "history": "Pintada em 1875, esta obra é um exemplo clássico do estilo de Monet, usando luz natural e cores vivas para retratar o movimento e a atmosfera.",
+      "symbolism": "A leveza e o movimento da figura feminina são capturados com pinceladas rápidas e cores que refletem a atmosfera do momento.",
+      "type":"Impressionismo  "
+    },
+    {
+      "code": "038",
+      "title": "Noite Estrelada sobre o Ródano",
+      "author": "Vincent van Gogh",
+      "year": "1888",
+      "materials": "Óleo sobre tela",
+      "description": "Van Gogh pintou uma cena noturna do Ródano, com estrelas brilhando sobre a água, usando cores vibrantes e pinceladas expressivas.",
+      "history": "Criada em 1888, esta obra é uma das primeiras representações de Van Gogh do céu noturno, mostrando seu interesse em capturar a luz das estrelas.",
+      "symbolism": "As estrelas e a luz refletem a luta interna de Van Gogh, enquanto o céu tumultuado e as cores expressam seus estados emocionais.",
+      "type":"Impressionismo  "
+    },
+    {
+      "code": "039",
+      "title": "O Jardim da Casa em Arles",
+      "author": "Vincent van Gogh",
+      "year": "1888",
+      "materials": "Óleo sobre tela",
+      "description": "Van Gogh retratou o jardim de sua casa em Arles, com um uso vibrante de cores e uma sensação de movimento nas plantas e flores.",
+      "history": "Pintada em 1888, esta obra reflete o amor de Van Gogh pela natureza e seu desejo de representar a luz e a cor de maneira expressiva.",
+      "symbolism": "O jardim e as flores representam a busca por paz e beleza em meio ao caos interior do artista.",
+      "type":"Impressionismo  "
+    }, 
+    {
+      "code": "040",
+      "title": "O Bar no Folies-Bergère",
+      "author": "Édouard Manet",
+      "year": "1882",
+      "materials": "Óleo sobre tela",
+      "description": "Manet pintou uma mulher atrás do balcão de um bar, com uma reflexão sobre a vida urbana e a alienação na sociedade moderna.",
+      "history": "Criada em 1882, esta pintura foi uma das últimas de Manet e é famosa por sua complexa composição e representação da vida moderna.",
+      "symbolism": "A mulher no balcão e a atmosfera do bar simbolizam a solidão e a alienação em uma sociedade cada vez mais urbana e industrial.",
+      "type":"Impressionismo  "
+    }
+
+
+
+
+  ]
+}
