@@ -296,6 +296,15 @@ input:not([type]) {
   padding: 8px 10px;
   border-radius: 12px;
 }
+.infoCard__img {
+  margin-top: 10px;
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(10, 10, 14, 0.35);
+}
 .infoCard__desc {
   margin-top: 8px;
   color: rgba(255, 255, 255, 0.85);

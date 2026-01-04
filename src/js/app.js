@@ -44,6 +44,124 @@ let suppressTeleportUntilMs = 0;
 
 let experienceMode = "welcome"; // "welcome" | "explore" | "tour"
 
+const PAINTINGS_URL = "src/data/paintings.json";
+let paintingsByCodePromise = null;
+
+function pad3(n) {
+  const s = String(n);
+  return s.padStart(3, "0");
+}
+
+async function loadPaintingsByCode() {
+  if (paintingsByCodePromise) return paintingsByCodePromise;
+  paintingsByCodePromise = (async () => {
+    const r = await fetch(PAINTINGS_URL, { cache: "no-store" });
+    const json = await r.json();
+    const arr = Array.isArray(json?.paintings) ? json.paintings : [];
+    const map = {};
+    for (const p of arr) {
+      const code = typeof p?.code === "string" ? p.code.trim() : "";
+      if (!code) continue;
+      map[code] = p;
+    }
+    return map;
+  })().catch(() => ({}));
+  return paintingsByCodePromise;
+}
+
+function inferPaintingCodeFromStop(stop, idx) {
+  if (stop?.code != null) {
+    const c = String(stop.code).trim();
+    return c ? c : null;
+  }
+
+  // "Quadro 1".."Quadro 40" -> "001".."040"
+  const t = String(stop?.title || "").trim();
+  const m = t.match(/^quadro\s*(\d+)$/i);
+  if (m) return pad3(Number(m[1]));
+
+  // fallback: index 1 => 001 (porque index 0 costuma ser "Início")
+  if (Number.isInteger(idx) && idx > 0) {
+    const n = idx;
+    if (n >= 1 && n <= 999) return pad3(n);
+  }
+
+  return null;
+}
+
+function imageUrlForPainting(p) {
+  const type = String(p?.type || "")
+    .trim()
+    .toLowerCase();
+  const code = String(p?.code || "").trim();
+  if (!code) return "";
+
+  const folderByType = {
+    barroco: "Sala1Barroco",
+    romantismo: "Sala2Romantismo",
+    cubismo: "Sala3Cubismo",
+    impressionismo: "Sala4Impressionismo",
+  };
+
+  const folder = folderByType[type];
+  if (!folder) return "";
+  const ext = code === "038" ? "jpeg" : "jpg";
+  return `src/assets/images/${folder}/${code}.${ext}`;
+}
+
+function formatPaintingDesc(p) {
+  const title = String(p?.title || "").trim();
+  const author = String(p?.author || "").trim();
+  const year = String(p?.year || "").trim();
+  const materials = String(p?.materials || "").trim();
+  const description = String(p?.description || "").trim();
+  const history = String(p?.history || "").trim();
+  const symbolism = String(p?.symbolism || "").trim();
+  const type = String(p?.type || "").trim();
+
+  const head = [author, year].filter(Boolean).join(" • ");
+  const meta = [materials, type].filter(Boolean).join(" • ");
+
+  const lines = [];
+  if (head) lines.push(head);
+  if (meta) lines.push(meta);
+  if (head || meta) lines.push("");
+
+  if (description) lines.push(description);
+
+  if (history) {
+    lines.push("");
+    lines.push("História");
+    lines.push(history);
+  }
+
+  if (symbolism) {
+    lines.push("");
+    lines.push("Simbolismo");
+    lines.push(symbolism);
+  }
+
+  return { title, desc: lines.join("\n") };
+}
+
+async function enrichStopsWithPaintings(stops) {
+  if (!Array.isArray(stops) || !stops.length) return;
+  const byCode = await loadPaintingsByCode();
+  for (let i = 0; i < stops.length; i++) {
+    const stop = stops[i];
+    const code = inferPaintingCodeFromStop(stop, i);
+    if (!code) continue;
+    const p = byCode?.[code];
+    if (!p) continue;
+
+    const formatted = formatPaintingDesc(p);
+    if (formatted.title) stop.title = formatted.title;
+    if (formatted.desc) stop.desc = formatted.desc;
+    stop.paintingCode = code;
+    stop.imageUrl = imageUrlForPainting(p);
+  }
+}
+
 function isFullscreen() {
   return !!document.fullscreenElement;
 }
@@ -440,12 +558,11 @@ AFRAME.registerComponent("hotspot", {
       });
 
       const tourRunning = !!tourC?.running;
+      setInfoCardImage(match?.imageUrl || "", title);
       showInfoCard(
         title,
         desc,
-        tourRunning
-          ? "(clica no chão para teleport · usa Q/E ou ←/→ para navegar)"
-          : ""
+        tourRunning ? "Usa Q/E ou ←/→ para navegar." : ""
       );
 
       try {
@@ -528,6 +645,9 @@ AFRAME.registerComponent("tour-guide", {
       applyStopOverrides(this.stops);
     }
 
+    // Enriquecimento via paintings.json (título/descrição/imagem), quando disponível.
+    await enrichStopsWithPaintings(this.stops);
+
     this.stopsLoaded = true;
 
     window.dispatchEvent(
@@ -541,7 +661,7 @@ AFRAME.registerComponent("tour-guide", {
     this.running = true;
     this.paused = false;
     this.idx = 0;
-    this.data.rig?.setAttribute("wasd-controls", "enabled: false");
+    this.data.rig?.setAttribute("wasd-controls", "enabled", false);
 
     // Se o utilizador iniciar antes de carregar o JSON, espera aqui.
     try {
@@ -574,9 +694,11 @@ AFRAME.registerComponent("tour-guide", {
   stop: function () {
     this.running = false;
     this.paused = false;
-    if (experienceMode === "tour") experienceMode = "explore";
+    const leavingTour = experienceMode === "tour";
+    if (leavingTour) experienceMode = "explore";
     this._clearTimers();
-    this.data.rig?.setAttribute("wasd-controls", "enabled: true");
+    if (leavingTour)
+      this.data.rig?.setAttribute("wasd-controls", "enabled", true);
     setTeleportEnabled(false);
     this.data.panel?.setAttribute("visible", false);
     this.data.narrator?.removeAttribute("sound");
@@ -622,7 +744,7 @@ AFRAME.registerComponent("tour-guide", {
     this.reducedMotion = true;
     if (!this.running) this.running = true;
     this.paused = false;
-    this.data.rig?.setAttribute("wasd-controls", "enabled: false");
+    this.data.rig?.setAttribute("wasd-controls", "enabled", false);
     this._goToStop(this.idx);
     this.reducedMotion = prev;
   },
@@ -679,6 +801,7 @@ AFRAME.registerComponent("tour-guide", {
 
   _applyPanel: function (stop) {
     // Mostra UI HTML (não tapa o ecrã como o painel 3D)
+    setInfoCardImage(stop?.imageUrl || "", stop?.title || "");
     showInfoCard(
       stop.title,
       stop.desc,
@@ -1037,6 +1160,21 @@ function showInfoCard(title, desc, hint) {
   card.classList.remove("is-hidden");
 }
 
+function setInfoCardImage(url, alt) {
+  const img = $("#infoCardImg");
+  if (!img) return;
+  const u = String(url || "").trim();
+  if (!u) {
+    img.classList.add("is-hidden");
+    img.removeAttribute("src");
+    img.alt = "";
+    return;
+  }
+  img.src = u;
+  img.alt = alt || "";
+  img.classList.remove("is-hidden");
+}
+
 function setInfoCardTransition(active, title = "A mudar…") {
   // Apenas no modo visita guiada.
   if (experienceMode !== "tour") return;
@@ -1044,11 +1182,13 @@ function setInfoCardTransition(active, title = "A mudar…") {
   if (!card) return;
   card.setAttribute("aria-busy", active ? "true" : "false");
   if (!active) return;
+  setInfoCardImage("", "");
   showInfoCard(title, "", "");
 }
 
 function hideInfoCard() {
   $("#infoCard")?.classList.add("is-hidden");
+  setInfoCardImage("", "");
 }
 
 function showToast(text) {
@@ -1057,6 +1197,7 @@ function showToast(text) {
     $("#infoCardHint").textContent = text;
     return;
   }
+  setInfoCardImage("", "");
   showInfoCard("Info", text, experienceMode === "tour" ? "" : "");
   setTimeout(() => hideInfoCard(), 1400);
 }
@@ -1429,6 +1570,54 @@ function setupUI() {
       const tourC = $("#tour")?.components?.["tour-guide"];
       if (!tourC) return;
 
+      const infoOpen = !$("#infoCard")?.classList.contains("is-hidden");
+      const key = e.key;
+      const keyLower = String(key || "").toLowerCase();
+      const inTourMode = experienceMode === "tour" || tourC.running;
+
+      // Se o info card estiver aberto, não deixar as setas moverem o utilizador.
+      // (Em tour, setas esquerda/direita continuam a navegar.)
+      if (infoOpen) {
+        if (key === "ArrowUp" || key === "ArrowDown") {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        if (!inTourMode && (key === "ArrowLeft" || key === "ArrowRight")) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+
+      // No modo visita guiada: bloquear movimento manual completamente.
+      // WASD + setas cima/baixo não devem mexer; esquerda/direita navega.
+      if (inTourMode) {
+        if (
+          keyLower === "w" ||
+          keyLower === "a" ||
+          keyLower === "s" ||
+          keyLower === "d" ||
+          key === "ArrowUp" ||
+          key === "ArrowDown"
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+
+        if (key === "ArrowRight") {
+          e.preventDefault();
+          e.stopPropagation();
+          tourC.next();
+          return;
+        }
+        if (key === "ArrowLeft") {
+          e.preventDefault();
+          e.stopPropagation();
+          tourC.prev();
+          return;
+        }
+      }
+
       if (
         tourC.running &&
         (e.key === "ArrowLeft" ||
@@ -1462,7 +1651,7 @@ function setupUI() {
       }
       if (e.key === "n" || e.key === "N") tourC.next();
 
-      // navegação da visita manual
+      // navegação da visita manual (fallback; normalmente já foi tratado acima)
       if (e.key === "ArrowRight") tourC.next();
       if (e.key === "ArrowLeft") tourC.prev();
 
@@ -1595,24 +1784,25 @@ async function enterExperience(mode) {
   setWelcomeVisible(false);
   setUIVisible(true);
 
-  experienceMode = mode === "tour" ? "tour" : "explore";
-
   const rig = $("#rig");
   const tour = $("#tour")?.components?.["tour-guide"];
   if (!rig || !tour) return;
 
   // Explorar: WASD on; Tour: WASD off e navega com setas
   if (mode === "explore") {
+    experienceMode = "explore";
     tour.stop();
     setTeleportEnabled(false);
-    rig.setAttribute("wasd-controls", "enabled: true");
+    rig.setAttribute("wasd-controls", "enabled", true);
     updateTourNav(false);
     hideInfoCard();
     showToast("Exploração livre ativa.");
   } else {
-    rig.setAttribute("wasd-controls", "enabled: false");
+    // garante reset do estado anterior sem efeitos colaterais
     tour.stop();
-    setTeleportEnabled(true);
+    experienceMode = "tour";
+    rig.setAttribute("wasd-controls", "enabled", false);
+    setTeleportEnabled(false);
     tour.start();
     updateTourNav(true, tour.idx, tour.stops.length);
   }
