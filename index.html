@@ -17,8 +17,8 @@
         <div class="welcome__title">Bem-vindo ao museu virtual</div>
         <div class="welcome__subtitle">
           Escolhe como queres começar. Podes explorar livremente (WASD + rato)
-          ou fazer uma visita guiada
-          <b>manual</b> com setas para avançares ao teu ritmo.
+          ou fazer uma visita guiada <b>manual</b> com setas para avançares ao
+          teu ritmo.
         </div>
 
         <div class="welcome__buttons">
@@ -217,8 +217,7 @@
           </div>
           <div class="ui__hint">
             Extra: <b>Q</b>/<b>E</b> anterior/seguinte · <b>C</b> foto ·
-            <b>F</b>
-            lanterna
+            <b>F</b> lanterna
           </div>
         </div>
 
@@ -368,7 +367,7 @@
       >
         <a-camera id="cam" position="0 1.6 0" look-controls="enabled: true">
           <a-cursor
-            raycaster="objects: .hotspot, .teleportable"
+            raycaster="objects: .hotspot, .teleportable, .quadroHitbox"
             fuse="false"
           ></a-cursor>
 
@@ -410,6 +409,99 @@
         id="tour"
         tour-guide="rig: #rig; panel: #infoPanel; text: #infoText; narrator: #narrator; stopsUrl: src/data/tourStops.json; speed: 1.0; autoAdvance: false"
       ></a-entity>
+
+      <!-- ========================= -->
+      <!-- TESTE: ANCHOR_001 -> QUADRO -->
+      <!-- ========================= -->
+      <script>
+  const museuEl = document.querySelector("#museuModel");
+
+  museuEl.addEventListener("model-loaded", () => {
+    const root = museuEl.getObject3D("mesh");
+    if (!root) return;
+
+    // 1) procurar o PLANE_001 (tem de ser um mesh separado no GLB)
+    const marker = root.getObjectByName("PLANE_001");
+    if (!marker) {
+      console.warn(
+        "PLANE_001 não encontrado. Confirma que no Blender é um objeto separado (mesh) e exportaste no GLB."
+      );
+      return;
+    }
+
+    // 2) posição + rotação em world space
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const sca = new THREE.Vector3();
+    marker.updateWorldMatrix(true, false);
+    marker.matrixWorld.decompose(pos, quat, sca);
+
+    // 3) tamanho (width/height) baseado na geometria do PLANE_001
+    // Assumimos que é um Plane (geometria em XY). Isto costuma bater certo.
+    let width = 1.2, height = 0.8;
+
+    if (marker.geometry) {
+      marker.geometry.computeBoundingBox();
+      const bb = marker.geometry.boundingBox; // local
+      const sizeLocal = new THREE.Vector3();
+      bb.getSize(sizeLocal);
+
+      // escala em world
+      const worldScale = new THREE.Vector3();
+      marker.getWorldScale(worldScale);
+
+      width  = sizeLocal.x * worldScale.x;
+      height = sizeLocal.y * worldScale.y;
+    }
+
+    console.log("PLANE_001 world pos:", pos, "width/height:", width, height);
+
+    // (Opcional) esconder o plane marcador do GLB (para não aparecer por cima)
+    marker.visible = false;
+
+    // 4) criar o quadro visível (imagem)
+    const quadro = document.createElement("a-plane");
+    quadro.setAttribute("id", "quadro_001");
+    quadro.setAttribute("width", width);
+    quadro.setAttribute("height", height);
+    quadro.setAttribute(
+  "material",
+  "src: url(src/assets/images/Sala1Barroco/001.jpg); roughness: 1; metalness: 0; side: double"
+);
+ 
+
+    quadro.object3D.position.copy(pos);
+    quadro.object3D.quaternion.copy(quat);
+ 
+    // empurra um bocadinho para fora (se ficar para dentro, troca 0.01 por -0.01)
+    quadro.object3D.translateZ(-0.7);
+
+    museuEl.sceneEl.appendChild(quadro);
+
+    // 5) hitbox invisível (para raycaster)
+    const hit = document.createElement("a-plane");
+    hit.classList.add("quadroHitbox");
+    hit.setAttribute("data-art", "001");
+    hit.setAttribute("width", width + 0.08);
+    hit.setAttribute("height", height + 0.08);
+    hit.setAttribute("material", "transparent:true; opacity:0");
+
+    hit.object3D.position.copy(pos);
+    hit.object3D.quaternion.copy(quat);
+    hit.object3D.translateZ(0.011);
+
+    hit.addEventListener("mouseenter", () => console.log("A olhar para quadro 001"));
+    hit.addEventListener("mouseleave", () => console.log("Saiu do quadro 001"));
+    hit.addEventListener("click", () => console.log("Click no quadro 001"));
+
+    museuEl.sceneEl.appendChild(hit);
+
+    console.log("Quadro criado a partir do PLANE_001 ✅");
+  });
+</script>
+
+
+      <!-- O teu JS -->
       <script type="module" src="src/js/app.js"></script>
     </a-scene>
   </body>
