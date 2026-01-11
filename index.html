@@ -24,7 +24,7 @@
         <div class="welcome__buttons">
           <button id="btnEnterExplore">Explorar livremente</button>
           <button id="btnEnterTour" class="secondary">
-            Visita guiada (manual)
+            Visita guiada 
           </button>
           <button id="btnFullscreenWelcome" class="secondary">
             Fullscreen
@@ -140,21 +140,21 @@
           </label>
         </div>
 
-        <div class="ui__section">
-          <div class="ui__sectionTitle">Modo 360</div>
+     <!--    <div class="ui__section"> -->
+         <!--  <div class="ui__sectionTitle">Modo 360</div>
           <div class="ui__buttons">
             <button id="btnModeMuseum" class="secondary">Museu 3D</button>
             <button id="btnModePano" class="secondary">Panorama 360</button>
-            <button id="btnModeVideo" class="secondary">Vídeo 360</button>
-          </div>
-          <label class="ui__row ui__row--stack">
+            <button id="btnModeVideo" class="secondary">Vídeo 360</button> -->
+         <!--  </div> -->
+        <!--   <label class="ui__row ui__row--stack">
             <span>URL panorama (jpg/png)</span>
             <input
               id="txtPanoUrl"
               placeholder="ex: src/assets/images/panorama.jpg"
             />
-          </label>
-          <label class="ui__row ui__row--stack">
+          </label> -->
+        <!--   <label class="ui__row ui__row--stack">
             <span>URL vídeo 360 (mp4)</span>
             <input
               id="txtVideoUrl"
@@ -165,7 +165,7 @@
             <button id="btnApply360" class="secondary">Aplicar</button>
           </div>
         </div>
-
+ -->
         <div class="ui__section">
           <div class="ui__sectionTitle">Teleports (paragens)</div>
           <div id="stopsList" class="ui__list"></div>
@@ -331,36 +331,20 @@
       ></a-plane>
 
       <!-- Modo 360: sky / videosphere (inicialmente escondidos) -->
-      <a-sky id="sky360" visible="false" color="#101018"></a-sky>
+   <!--    <a-sky id="sky360" visible="false" color="#101018"></a-sky>
       <a-videosphere
         id="videoSphere"
         visible="false"
         src="#video360"
-      ></a-videosphere>
+      ></a-videosphere> -->
 
       <!-- Hotspots (dá IDs para usar como target) -->
-      <a-sphere
-        id="q1Target"
-        class="hotspot"
-        position="-3 1.5 -4.8"
-        radius="0.08"
-        color="#ffffff"
-        hotspot=""
-      ></a-sphere>
-
-      <a-sphere
-        id="q2Target"
-        class="hotspot"
-        position="3 1.5 -4.8"
-        radius="0.08"
-        color="#ffffff"
-        hotspot=""
-      ></a-sphere>
+ 
 
       <!-- RIG: move-se no tour e no WASD -->
       <a-entity
         id="rig"
-        position="0 0 3"
+        position="0.00 0.00 4.00"
         wasd-controls="acceleration: 2; enabled: false; fly: false"
         bounds-keeper="minX: -60; maxX: 60; minZ: -80; maxZ: 80; y: 0"
         print-aim
@@ -563,15 +547,21 @@
       hit.addEventListener("mouseleave", () =>
         console.log(`Saiu do quadro ${code}`)
       );
-      hit.addEventListener("click", () =>
-        console.log(`Click no quadro ${code}`)
-      );
+      hit.addEventListener("click", (e) => {
+  // evita que o click "passe" para outras coisas
+  e.stopPropagation?.();
+  e.preventDefault?.();
+
+  // abre a info do quadro
+  window.VirtuMuseum?.openPaintingInfoByCode?.(code);
+});
+
 
       museuEl.sceneEl.appendChild(hit);
 
-      console.log(
+      /* console.log(
         `Quadro ${code} criado (offset ${offset}) ✅`
-      );
+      ); */
     }
   });
 </script>

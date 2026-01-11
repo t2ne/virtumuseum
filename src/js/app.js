@@ -89,6 +89,42 @@ function inferPaintingCodeFromStop(stop, idx) {
   return null;
 }
 
+async function openPaintingInfoByCode(code) {
+  const c = String(code || "").trim();
+  if (!c) return;
+
+  const byCode = await loadPaintingsByCode();
+  const p = byCode?.[c];
+
+  if (!p) {
+    showToast(`Sem informação para o quadro ${c}.`);
+    return;
+  }
+
+  const { title, desc } = formatPaintingDesc(p);
+  const imgUrl = imageUrlForPainting(p);
+
+  setInfoCardImage(imgUrl || "", title || "");
+  showInfoCard(
+    title || `Quadro ${c}`,
+    desc || "",
+    experienceMode === "tour" ? "Usa ← / → para navegar. (Esc termina a visita)" : ""
+  );
+
+  // opcional: respeitar a opção TTS do user
+  const ttsOn = localStorage.getItem("virtumuseum.tts") === "1";
+  if (ttsOn) {
+    // evita ler muitos \n
+    const t = `${title}. ${String(desc || "").replace(/\n+/g, " ")}`;
+    speak(t);
+  }
+}
+
+// expõe para poderes chamar a partir do script que cria os quadros/hitboxes
+window.VirtuMuseum = window.VirtuMuseum || {};
+window.VirtuMuseum.openPaintingInfoByCode = openPaintingInfoByCode;
+
+
 function imageUrlForPainting(p) {
   const type = String(p?.type || "")
     .trim()
@@ -498,26 +534,32 @@ AFRAME.registerComponent("print-aim", {
   schema: { key: { type: "string", default: "p" } },
   init: function () {
     window.addEventListener("keydown", (e) => {
+      
       if (e.key.toLowerCase() !== this.data.key.toLowerCase()) return;
+
       const rig = $("#rig");
       const cam = $("#cam");
       if (!rig || !cam) return;
+
       const rp = rig.getAttribute("position");
       const cr = cam.getAttribute("rotation");
+
       const dir = new THREE.Vector3();
       cam.object3D.getWorldDirection(dir);
+
+      // yaw em graus (o que interessa para o tour "rot": "0 YAW 0")
+      const yawDeg = THREE.MathUtils.radToDeg(Math.atan2(dir.x, dir.z));
+
       console.log(
-        `RIG_POS: "${rp.x.toFixed(2)} ${rp.y.toFixed(2)} ${rp.z.toFixed(
-          2
-        )}"  ` +
-          `CAM_ROT: "${cr.x.toFixed(2)} ${cr.y.toFixed(2)} ${cr.z.toFixed(
-            2
-          )}"  ` +
-          `DIR: "${dir.x.toFixed(3)} ${dir.y.toFixed(3)} ${dir.z.toFixed(3)}"`
+        `RIG_POS: "${rp.x.toFixed(2)} ${rp.y.toFixed(2)} ${rp.z.toFixed(2)}"  ` +
+        `CAM_ROT: "${cr.x.toFixed(2)} ${cr.y.toFixed(2)} ${cr.z.toFixed(2)}"  ` +
+        `DIR: "${dir.x.toFixed(3)} ${dir.y.toFixed(3)} ${dir.z.toFixed(3)}"  ` +
+        `YAW: "${yawDeg.toFixed(2)}"`
       );
     });
   },
 });
+
 
 AFRAME.registerComponent("hotspot", {
   schema: {
@@ -627,18 +669,20 @@ AFRAME.registerComponent("tour-guide", {
     const json = (this.data.stopsEl?.textContent || "").trim();
     return json ? safeJsonParse(json, []) : [];
   },
+_loadStops: async function () {
+  try {
+    const url = this.data.stopsUrl || "src/data/tourStops.json";
+    const r = await fetch(url, { cache: "no-store" });
+    console.log("[tour] fetch", url, "status", r.status);
+    const stops = await r.json();
+    this.stops = Array.isArray(stops) ? stops : [];
+  } catch (err) {
+    console.warn("[tour] falhou carregar stops:", err);
+    this.stops = this._readStopsFromDom();
+  }
 
-  _loadStops: async function () {
-    // tenta carregar do ficheiro; fallback para o script embed (se existir)
-    try {
-      const url = this.data.stopsUrl || "src/data/tourStops.json";
-      const r = await fetch(url, { cache: "no-store" });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      const stops = await r.json();
-      this.stops = Array.isArray(stops) ? stops : [];
-    } catch {
-      this.stops = this._readStopsFromDom();
-    }
+  console.log("[tour] stops carregados:", this.stops.length, this.stops[0]);
+ 
 
     // aplica overrides persistentes (para corrigir posições/rotações)
     if (Array.isArray(this.stops) && this.stops.length) {
@@ -656,26 +700,27 @@ AFRAME.registerComponent("tour-guide", {
   },
 
   start: async function () {
-    if (this.running) return;
-    experienceMode = "tour";
-    this.running = true;
-    this.paused = false;
-    this.idx = 0;
-    this.data.rig?.setAttribute("wasd-controls", "enabled", false);
+  if (this.running) return;
+  experienceMode = "tour";
+  this.running = true;
+  this.paused = false;
+  this.idx = 0;
+  this.data.rig?.setAttribute("wasd-controls", "enabled", false);
 
-    // Se o utilizador iniciar antes de carregar o JSON, espera aqui.
-    try {
-      await this._stopsReady;
-    } catch {}
+  try { await this._stopsReady; } catch {}
 
-    if (!this.stops?.length) {
-      showToast("Visita: não foi possível carregar as paragens.");
-      this.stop();
-      return;
-    }
+  if (!this.stops?.length) {
+    showToast("Visita: não foi possível carregar as paragens.");
+    this.stop();
+    return;
+  }
 
-    this._goToStop(this.idx);
-  },
+  const prevRM = this.reducedMotion;
+  this.reducedMotion = true;   // teleport instantâneo no 1º stop
+  this._goToStop(this.idx);
+  this.reducedMotion = prevRM;
+},
+
 
   pause: function () {
     if (!this.running || this.paused) return;
@@ -778,8 +823,8 @@ AFRAME.registerComponent("tour-guide", {
     }
 
     rig.removeAttribute("animation__pos");
-    rig.removeAttribute("animation__rot");
-    showToast(`Teleport: ${stop.title || "paragem"}`);
+/*     rig.removeAttribute("animation__rot");
+ */    showToast(`Teleport: ${stop.title || "paragem"}`);
   },
 
   _clearTimers: function () {
@@ -811,97 +856,145 @@ AFRAME.registerComponent("tour-guide", {
   },
 
   _goToStop: function (i) {
-    if (!this.running || this.paused) return;
-    const stop = this.stops[i];
-    if (!stop) {
-      showToast("Paragem inválida.");
-      updateTourNav(true, this.idx, this.stops.length);
-      return;
-    }
+  if (!this.running || this.paused) return;
+  const stop = this.stops[i];
+  if (!stop) {
+    showToast("Paragem inválida.");
+    updateTourNav(true, this.idx, this.stops.length);
+    return;
+  }
 
-    const speed = this.data.speed || 1.0;
-    const moveDur = (stop.moveDur ?? 1500) / speed;
-    const lookDur = (stop.lookDur ?? 600) / speed;
-    const wait = (stop.wait ?? 1200) / speed;
+  const speed = this.data.speed || 1.0;
+  const moveDur = (stop.moveDur ?? 1500) / speed;
+  const lookDur = (stop.lookDur ?? 600) / speed;
+  const wait = (stop.wait ?? 1200) / speed;
 
-    const rig = this.data.rig;
-    if (!rig) return;
-    const bounds = getBoundsForRig(rig);
+  const rig = this.data.rig;
+  if (!rig) return;
+  const bounds = getBoundsForRig(rig);
 
-    // Inter-state: enquanto muda de paragem (ativo para setas e para menu no modo tour).
-    const destTitle = stop.title
-      ? `A caminho: ${stop.title}`
-      : "A mudar de paragem…";
-    setInfoCardTransition(true, destTitle);
-    $("#btnTourPrev")?.setAttribute("disabled", "true");
-    $("#btnTourNext")?.setAttribute("disabled", "true");
+  // Inter-state: enquanto muda de paragem
+  const destTitle = stop.title ? `A caminho: ${stop.title}` : "A mudar de paragem…";
+  setInfoCardTransition(true, destTitle);
+  $("#btnTourPrev")?.setAttribute("disabled", "true");
+  $("#btnTourNext")?.setAttribute("disabled", "true");
 
-    // movimento / teleport
-    if (stop.pos) {
-      const parsed = parseVec3String(stop.pos);
-      if (!parsed) {
-        showToast("Paragem com posição inválida.");
-      } else {
-        const clamped = clampPosToBounds(parsed, bounds);
-        const toPos = vec3ToString(clamped);
-        if (this.reducedMotion) {
-          rig.setAttribute("position", toPos);
-          rig.removeAttribute("animation__pos");
-        } else {
-          rig.setAttribute("animation__pos", {
-            property: "position",
-            to: toPos,
-            dur: moveDur,
-            easing: "easeInOutQuad",
-          });
-        }
-      }
-    }
-
-    const afterMove = this.reducedMotion ? 0 : moveDur;
-    const minInterDelay = afterMove === 0 ? 80 : 0;
-
-    // ao chegar: texto/áudio + olhar
-    const t1 = setTimeout(() => {
-      if (!this.running || this.paused) return;
-
-      setInfoCardTransition(false);
-
-      this._applyPanel(stop);
-
-      // áudio (A-Frame sound, se definido)
-      if (stop.audio && this.data.narrator) {
-        this.data.narrator.removeAttribute("sound");
-        this.data.narrator.setAttribute("sound", {
-          src: stop.audio,
-          autoplay: true,
-          positional: false,
-          volume: 1.0,
-        });
-      } else {
-        this.data.narrator?.removeAttribute("sound");
-      }
-
-      // No modo visita guiada, não forçar rotação do rig/câmara.
-      // Mantém a view exatamente como o utilizador está a olhar.
-      rig.removeAttribute("animation__rot");
-
-      // manual tour: ativa setas/hud
-      updateTourNav(true, i, this.stops.length);
-    }, afterMove + minInterDelay);
-
-    // próximo stop (apenas se autoAdvance = true)
-    if (this.data.autoAdvance) {
-      const t2 = setTimeout(() => {
-        if (!this.running || this.paused) return;
-        this.idx = i + 1;
-        this._goToStop(this.idx);
-      }, afterMove + (this.reducedMotion ? 0 : lookDur) + wait);
-      this.timers.push(t1, t2);
+  // -----------------------------
+  // 1) MOVIMENTO / TELEPORT (POS)
+  // -----------------------------
+  if (stop.pos) {
+    const parsed = parseVec3String(stop.pos);
+    if (!parsed) {
+      showToast("Paragem com posição inválida.");
     } else {
-      this.timers.push(t1);
+      const clamped = clampPosToBounds(parsed, bounds);
+      const toPos = vec3ToString(clamped);
+
+      if (this.reducedMotion) {
+        rig.setAttribute("position", toPos);
+        rig.removeAttribute("animation__pos");
+      } else {
+        rig.setAttribute("animation__pos", {
+          property: "position",
+          to: toPos,
+          dur: moveDur,
+          easing: "easeInOutQuad",
+        });
+      }
     }
-  },
+  }
+// -----------------------------
+// 2) ROTAÇÃO (target OU rot)
+// -----------------------------
+let rotStr = null;
+
+if (stop.target) {
+  // se tens target, mantém yaw para o alvo (sem inclinar)
+  const targetEl = document.querySelector(stop.target);
+  if (targetEl) rotStr = this._yawToTarget(rig, targetEl); // "0 Y 0"
+} else if (stop.rot) {
+  const r = parseVec3String(stop.rot);
+  if (r) rotStr = `${r.x} ${r.y} ${r.z}`; // ✅ agora usa X Y Z
+}
+
+if (rotStr) {
+  if (this.reducedMotion) {
+    rig.setAttribute("rotation", rotStr);
+    rig.removeAttribute("animation__rot");
+  } else {
+    rig.setAttribute("animation__rot", {
+      property: "rotation",
+      to: rotStr,
+      dur: lookDur,
+      easing: "easeInOutQuad",
+    });
+  }
+}
+
+
+  const afterMove = this.reducedMotion ? 0 : moveDur;
+  const minInterDelay = afterMove === 0 ? 80 : 0;
+
+  // ao chegar: texto/áudio
+  const t1 = setTimeout(() => {
+    if (!this.running || this.paused) return;
+
+setInfoCardTransition(false);
+
+// Em vez de abrir a descrição completa automaticamente:
+setInfoCardImage("", "");
+showInfoCard(
+  stop.title || "Paragem",
+  "",
+  "Clica no quadro para ver a informação."
+);
+
+// áudio do stop (se estiveres a usar stop.audio) podes manter ou remover:
+if (stop.audio && this.data.narrator) {
+  this.data.narrator.removeAttribute("sound");
+  this.data.narrator.setAttribute("sound", {
+    src: stop.audio,
+    autoplay: true,
+    positional: false,
+    volume: 1.0,
+  });
+} else {
+  this.data.narrator?.removeAttribute("sound");
+}
+
+updateTourNav(true, i, this.stops.length);
+    this._applyPanel(stop);
+
+    // áudio
+    if (stop.audio && this.data.narrator) {
+      this.data.narrator.removeAttribute("sound");
+      this.data.narrator.setAttribute("sound", {
+        src: stop.audio,
+        autoplay: true,
+        positional: false,
+        volume: 1.0,
+      });
+    } else {
+      this.data.narrator?.removeAttribute("sound");
+    }
+
+    // NÃO remover animation__rot aqui (senão “mata” a rotação do stop)
+    updateTourNav(true, i, this.stops.length);
+  }, afterMove + minInterDelay);
+
+  // próximo stop (apenas se autoAdvance = true)
+  if (this.data.autoAdvance) {
+    const t2 = setTimeout(() => {
+      if (!this.running || this.paused) return;
+      this.idx = i + 1;
+      this._goToStop(this.idx);
+    }, afterMove + (this.reducedMotion ? 0 : lookDur) + wait);
+    this.timers.push(t1, t2);
+  } else {
+    this.timers.push(t1);
+  }
+},
+
 });
 
 AFRAME.registerComponent("teleport-surface", {
@@ -1048,10 +1141,41 @@ function waitForTourComponent() {
     el.addEventListener("componentinitialized", onInit);
   });
 }
+function syncMovementLock() {
+  const rig = $("#rig");
+  const cam = $("#cam");
+  const tourC = $("#tour")?.components?.["tour-guide"];
+
+  const menuOpen = $("#menuPanel")?.classList.contains("is-open");
+  const welcomeVisible = !$("#welcome")?.classList.contains("is-hidden"); // ecrã inicial
+  const inTour = experienceMode === "tour" || !!tourC?.running;
+
+  if (!rig) return;
+
+  // ✅ bloquear SEMPRE no welcome e quando o menu está aberto
+  const mustLock = welcomeVisible || experienceMode === "welcome" || menuOpen || inTour;
+
+  rig.setAttribute("wasd-controls", "enabled", !mustLock);
+
+  // (opcional mas recomendado) também bloquear rotação enquanto menu/welcome
+  if (cam) {
+    const lockLook = welcomeVisible || menuOpen;
+    cam.setAttribute("look-controls", "enabled", !lockLook);
+  }
+
+  // (opcional) parar "inércia" caso estivesse a andar
+  const wc = rig.components?.["wasd-controls"];
+  if (mustLock && wc?.velocity) {
+    wc.velocity.set(0, 0, 0);
+  }
+}
+
 
 function setMenuOpen(open) {
   const panel = $("#menuPanel");
   if (!panel) return;
+  document.body.classList.toggle("is-menu-open", open);
+  $("#menuBackdrop")?.setAttribute("aria-hidden", String(!open));
 
   // Evita warning: aria-hidden num ancestor que ainda retém focus.
   if (!open) {
@@ -1068,13 +1192,18 @@ function setMenuOpen(open) {
 
   panel.classList.toggle("is-open", open);
   panel.setAttribute("aria-hidden", String(!open));
+    syncMovementLock();
+
 }
 
 function toggleMenu() {
   const panel = $("#menuPanel");
   if (!panel) return;
   setMenuOpen(!panel.classList.contains("is-open"));
+  syncMovementLock();
 }
+
+
 
 function setUIVisible(visible) {
   const ui = $("#uiRoot");
@@ -1112,6 +1241,8 @@ function backToWelcome() {
   setWelcomeVisible(true);
   experienceMode = "welcome";
   updateTourNav(false);
+  syncMovementLock();
+
 }
 
 function setMinimalHUD(hudOff) {
@@ -1270,6 +1401,25 @@ function restore360Inputs() {
   if (vid) vid.value = videoUrl;
   if (panoUrl || videoUrl) apply360FromInputs();
 }
+
+function blockMoveKeys(e, { allowLeftRight = false } = {}) {
+  const k = String(e?.key || "").toLowerCase();
+
+  // WASD + setas
+  const isMove =
+    k === "w" || k === "a" || k === "s" || k === "d" ||
+    k === "arrowup" || k === "arrowdown" || k === "arrowleft" || k === "arrowright";
+
+  if (!isMove) return false;
+
+  // opcional: permitir ←/→ (ex: tour)
+  if (allowLeftRight && (k === "arrowleft" || k === "arrowright")) return false;
+
+  e.preventDefault?.();
+  e.stopPropagation?.();
+  return true;
+}
+
 
 function setupUI() {
   $("#btnMenu")?.addEventListener("click", toggleMenu);
@@ -1567,8 +1717,18 @@ function setupUI() {
   window.addEventListener(
     "keydown",
     (e) => {
+       const menuOpen = $("#menuPanel")?.classList.contains("is-open");
+    const welcomeVisible = !$("#welcome")?.classList.contains("is-hidden");
+    if (menuOpen || welcomeVisible || experienceMode === "welcome") {
+      if (blockMoveKeys(e)) return;
+    }
+
       const tourC = $("#tour")?.components?.["tour-guide"];
       if (!tourC) return;
+
+       if (inTourMode) {
+      if (blockMoveKeys(e, { allowLeftRight: true })) return;
+    }
 
       const infoOpen = !$("#infoCard")?.classList.contains("is-hidden");
       const key = e.key;
@@ -1806,6 +1966,8 @@ async function enterExperience(mode) {
     tour.start();
     updateTourNav(true, tour.idx, tour.stops.length);
   }
+  syncMovementLock();
+
 }
 
 function showHelp() {
