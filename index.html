@@ -14,7 +14,7 @@
     <div class="welcome" id="welcome">
       <div class="welcome__card">
         <div class="welcome__brand">VirtuMuseum</div>
-        <div class="welcome__title">Bem-vindo ao museu virtual</div>
+        <div class="welcome__title">Bem-vindo ao VirtuMuseum</div>
         <div class="welcome__subtitle">
           Escolhe como queres começar. Podes explorar livremente (WASD + rato)
           ou fazer uma visita guiada <b>manual</b> com setas para avançares ao
@@ -23,9 +23,7 @@
 
         <div class="welcome__buttons">
           <button id="btnEnterExplore">Explorar livremente</button>
-          <button id="btnEnterTour" class="secondary">
-            Visita guiada 
-          </button>
+          <button id="btnEnterTour" class="secondary">Visita guiada</button>
           <button id="btnFullscreenWelcome" class="secondary">
             Fullscreen
           </button>
@@ -75,6 +73,8 @@
         </button>
         <button id="btnFullscreen" class="secondary">Fullscreen</button>
       </div>
+
+      <div class="ui__backdrop" id="menuBackdrop" aria-hidden="true"></div>
 
       <div class="ui__panel" id="menuPanel" aria-hidden="true">
         <div class="ui__panelHeader">
@@ -140,13 +140,13 @@
           </label>
         </div>
 
-     <!--    <div class="ui__section"> -->
-         <!--  <div class="ui__sectionTitle">Modo 360</div>
+        <!--    <div class="ui__section"> -->
+        <!--  <div class="ui__sectionTitle">Modo 360</div>
           <div class="ui__buttons">
             <button id="btnModeMuseum" class="secondary">Museu 3D</button>
             <button id="btnModePano" class="secondary">Panorama 360</button>
             <button id="btnModeVideo" class="secondary">Vídeo 360</button> -->
-         <!--  </div> -->
+        <!--  </div> -->
         <!--   <label class="ui__row ui__row--stack">
             <span>URL panorama (jpg/png)</span>
             <input
@@ -169,17 +169,6 @@
         <div class="ui__section">
           <div class="ui__sectionTitle">Teleports (paragens)</div>
           <div id="stopsList" class="ui__list"></div>
-          <div class="ui__buttons">
-            <button id="btnSaveStopOverride" class="secondary">
-              Guardar pose nesta paragem
-            </button>
-            <button id="btnClearStopOverrides" class="secondary">
-              Limpar ajustes
-            </button>
-            <button id="btnCopyStopOverrides" class="secondary">
-              Copiar ajustes
-            </button>
-          </div>
         </div>
 
         <div class="ui__section">
@@ -256,13 +245,29 @@
     >
       <div class="infoCard__top">
         <div class="infoCard__title" id="infoCardTitle">—</div>
-        <button
-          class="infoCard__close secondary"
-          id="btnInfoClose"
-          title="Fechar"
-        >
-          Fechar
-        </button>
+        <div class="infoCard__actions">
+          <button
+            class="infoCard__action secondary"
+            id="btnInfoImgToggle"
+            title="Mostrar/ocultar imagem"
+          >
+            Imagem
+          </button>
+          <button
+            class="infoCard__action secondary"
+            id="btnInfoToggle"
+            title="Mostrar/ocultar painel"
+          >
+            Ocultar
+          </button>
+          <button
+            class="infoCard__close secondary"
+            id="btnInfoClose"
+            title="Fechar"
+          >
+            Fechar
+          </button>
+        </div>
       </div>
       <img class="infoCard__img is-hidden" id="infoCardImg" alt="" />
       <div class="infoCard__desc" id="infoCardDesc"></div>
@@ -272,6 +277,7 @@
     </div>
 
     <a-scene
+      keyboard-shortcuts="enterVR: false"
       vr-mode-ui="enabled: false"
       renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true"
       background="color: #0b0b0f"
@@ -279,10 +285,11 @@
       shadow="type: pcfsoft"
     >
       <a-assets>
-        <!-- Modelo --> <!-- museu.glb -->
+        <!-- Modelo -->
+        <!-- museu.glb -->
         <a-asset-item
           id="museuGLB"
-          src="src/assets/models/21-5.glb"  
+          src="src/assets/models/21-5.glb"
         ></a-asset-item>
 
         <!-- Media 360 (opcional) -->
@@ -331,7 +338,7 @@
       ></a-plane>
 
       <!-- Modo 360: sky / videosphere (inicialmente escondidos) -->
-   <!--    <a-sky id="sky360" visible="false" color="#101018"></a-sky>
+      <!--    <a-sky id="sky360" visible="false" color="#101018"></a-sky>
       <a-videosphere
         id="videoSphere"
         visible="false"
@@ -339,7 +346,6 @@
       ></a-videosphere> -->
 
       <!-- Hotspots (dá IDs para usar como target) -->
- 
 
       <!-- RIG: move-se no tour e no WASD -->
       <a-entity
@@ -394,180 +400,156 @@
         tour-guide="rig: #rig; panel: #infoPanel; text: #infoText; narrator: #narrator; stopsUrl: src/data/tourStops.json; speed: 1.0; autoAdvance: false"
       ></a-entity>
 
-      <!-- ========================= -->
-      <!-- TESTE: ANCHOR_001 -> QUADRO -->
-      <!-- ========================= -->
-    <script>
-  const museuEl = document.querySelector("#museuModel");
+      <!-- Quadros + hitboxes (a partir de PLANE_### no GLB) -->
+      <script>
+        const museuEl = document.querySelector("#museuModel");
 
-  function pad3(n) {
-    return String(n).padStart(3, "0");
-  }
+        function pad3(n) {
+          return String(n).padStart(3, "0");
+        }
 
-  // ===============================
-  // OPÇÃO B — offsets manuais
-  // valores NEGATIVOS = para dentro da parede
-  // ===============================
-  const quadroOffsets = {
-    "001": -0.7,
-    "002": -0.25,
-    "003": -0.7,
-    "004": -0.25,
-    "005": -0.25,
-    "006": -0.25,
-    "007": -0.25,
-    "008": -0.7,
-    "009": -0.25,
-    "010": -0.25,
-    "011": -0.7,
-    "012": -0.67,
-    "013": -0.67,
-    "014": -0.67,
-    "015": -0.67,
-    "016": -0.67,
-    "017": -0.67,
-    "018": -0.66,
-    "019": -0.20,
-    "020": -0.66,
-    "021": -0.20,
-    "022": -0.20,
-    "023": -0.20,
-    "024": -0.20,
-    "025": -0.67,
-    "026": -0.20,
-    "027": -0.20,
-    "028": -0.67,
-    "029": -0.67,
-    "030": -0.67,
-    "031": -0.67,
+        // offset fixo (ligeiro) para evitar z-fighting com a parede
+        const DEFAULT_OFFSET = -0.03;
 
-  };
+        // offsets por quadro (valores negativos = para dentro da parede)
+        const quadroOffsets = {
+          "001": -0.7,
+          "002": -0.25,
+          "003": -0.7,
+          "004": -0.25,
+          "005": -0.25,
+          "006": -0.25,
+          "007": -0.25,
+          "008": -0.7,
+          "009": -0.25,
+          "010": -0.25,
+          "011": -0.7,
+          "012": -0.67,
+          "013": -0.67,
+          "014": -0.67,
+          "015": -0.67,
+          "016": -0.67,
+          "017": -0.67,
+          "018": -0.66,
+          "019": -0.2,
+          "020": -0.66,
+          "021": -0.2,
+          "022": -0.2,
+          "023": -0.2,
+          "024": -0.2,
+          "025": -0.67,
+          "026": -0.2,
+          "027": -0.2,
+          "028": -0.67,
+          "029": -0.67,
+          "030": -0.67,
+          "031": -0.67,
+        };
 
-  const DEFAULT_OFFSET = -0.03;
+        museuEl.addEventListener("model-loaded", () => {
+          const root = museuEl.getObject3D("mesh");
+          if (!root) return;
 
-  museuEl.addEventListener("model-loaded", () => {
-    const root = museuEl.getObject3D("mesh");
-    if (!root) return;
+          for (let i = 1; i <= 31; i++) {
+            const code = pad3(i);
+            const planeName = `PLANE_${code}`;
 
-    for (let i = 1; i <= 31; i++) {
-      const code = pad3(i);
-      const planeName = `PLANE_${code}`;
+            const marker = root.getObjectByName(planeName);
+            if (!marker) {
+              console.warn(`${planeName} não encontrado no GLB.`);
+              continue;
+            }
 
-      const marker = root.getObjectByName(planeName);
-      if (!marker) {
-        console.warn(`${planeName} não encontrado no GLB.`);
-        continue;
-      }
+            // --- transform mundial do marker
+            const pos = new THREE.Vector3();
+            const quat = new THREE.Quaternion();
+            const sca = new THREE.Vector3();
+            marker.updateWorldMatrix(true, false);
+            marker.matrixWorld.decompose(pos, quat, sca);
 
-      // --- transform mundial do marker
-      const pos = new THREE.Vector3();
-      const quat = new THREE.Quaternion();
-      const sca = new THREE.Vector3();
-      marker.updateWorldMatrix(true, false);
-      marker.matrixWorld.decompose(pos, quat, sca);
+            // --- tamanho a partir da geometria
+            let width = 1.2;
+            let height = 0.8;
 
-      // --- tamanho a partir da geometria
-      let width = 1.2;
-      let height = 0.8;
+            if (marker.geometry) {
+              marker.geometry.computeBoundingBox();
+              const bb = marker.geometry.boundingBox;
+              const sizeLocal = new THREE.Vector3();
+              bb.getSize(sizeLocal);
 
-      if (marker.geometry) {
-        marker.geometry.computeBoundingBox();
-        const bb = marker.geometry.boundingBox;
-        const sizeLocal = new THREE.Vector3();
-        bb.getSize(sizeLocal);
+              const worldScale = new THREE.Vector3();
+              marker.getWorldScale(worldScale);
 
-        const worldScale = new THREE.Vector3();
-        marker.getWorldScale(worldScale);
+              width = sizeLocal.x * worldScale.x;
+              height = sizeLocal.y * worldScale.y;
 
-        width = sizeLocal.x * worldScale.x;
-        height = sizeLocal.y * worldScale.y;
+              if (width <= 0.0001) width = 1.2;
+              if (height <= 0.0001) height = 0.8;
+            }
 
-        if (width <= 0.0001) width = 1.2;
-        if (height <= 0.0001) height = 0.8;
-      }
+            // esconder marker do GLB
+            marker.visible = false;
 
-      // esconder marker do GLB
-      marker.visible = false;
+            // --- normal da parede
+            const normal = new THREE.Vector3(0, 0, 1)
+              .applyQuaternion(quat)
+              .normalize();
 
-      // --- normal da parede
-      const normal = new THREE.Vector3(0, 0, 1)
-        .applyQuaternion(quat)
-        .normalize();
+            const offset = quadroOffsets[code] ?? DEFAULT_OFFSET;
 
-      const offset = quadroOffsets[code] ?? DEFAULT_OFFSET;
-
-      // ===============================
-      // QUADRO VISÍVEL
-      // ===============================
-      const quadro = document.createElement("a-plane");
-      quadro.setAttribute("id", `quadro_${code}`);
-      quadro.setAttribute("width", width);
-      quadro.setAttribute("height", height);
-      quadro.setAttribute(
-        "material",
-        `
+            // ===============================
+            // QUADRO VISÍVEL
+            // ===============================
+            const quadro = document.createElement("a-plane");
+            quadro.setAttribute("id", `quadro_${code}`);
+            quadro.setAttribute("width", width);
+            quadro.setAttribute("height", height);
+            quadro.setAttribute(
+              "material",
+              `
         src: url(src/assets/images/Teste/${code}.jpg);
         side: double;
         roughness: 1;
         metalness: 0;
         `
-      );
+            );
 
-      quadro.object3D.position.copy(pos);
-      quadro.object3D.quaternion.copy(quat);
-      quadro.object3D.position.add(
-        normal.clone().multiplyScalar(offset)
-      );
+            quadro.object3D.position.copy(pos);
+            quadro.object3D.quaternion.copy(quat);
+            quadro.object3D.position.add(normal.clone().multiplyScalar(offset));
 
-      museuEl.sceneEl.appendChild(quadro);
+            museuEl.sceneEl.appendChild(quadro);
 
-      // ===============================
-      // HITBOX INVISÍVEL
-      // ===============================
-      const hit = document.createElement("a-plane");
-      hit.classList.add("quadroHitbox");
-      hit.setAttribute("data-art", code);
-      hit.setAttribute("width", width + 0.08);
-      hit.setAttribute("height", height + 0.08);
-      hit.setAttribute(
-        "material",
-        "transparent:true; opacity:0; side: double"
-      );
+            // ===============================
+            // HITBOX INVISÍVEL
+            // ===============================
+            const hit = document.createElement("a-plane");
+            hit.classList.add("quadroHitbox");
+            hit.setAttribute("data-art", code);
+            hit.setAttribute("width", width + 0.08);
+            hit.setAttribute("height", height + 0.08);
+            hit.setAttribute(
+              "material",
+              "transparent:true; opacity:0; side: double"
+            );
 
-      hit.object3D.position.copy(pos);
-      hit.object3D.quaternion.copy(quat);
-      hit.object3D.position.add(
-        normal.clone().multiplyScalar(offset)
-      );
+            hit.object3D.position.copy(pos);
+            hit.object3D.quaternion.copy(quat);
+            hit.object3D.position.add(normal.clone().multiplyScalar(offset));
 
-      // eventos (debug)
-      hit.addEventListener("mouseenter", () =>
-        console.log(`A olhar para quadro ${code}`)
-      );
-      hit.addEventListener("mouseleave", () =>
-        console.log(`Saiu do quadro ${code}`)
-      );
-      hit.addEventListener("click", (e) => {
-  // evita que o click "passe" para outras coisas
-  e.stopPropagation?.();
-  e.preventDefault?.();
+            hit.addEventListener("click", (e) => {
+              // evita que o click "passe" para outras coisas
+              e.stopPropagation?.();
+              e.preventDefault?.();
 
-  // abre a info do quadro
-  window.VirtuMuseum?.openPaintingInfoByCode?.(code);
-});
+              // abre a info do quadro
+              window.VirtuMuseum?.openPaintingInfoByCode?.(code);
+            });
 
-
-      museuEl.sceneEl.appendChild(hit);
-
-      /* console.log(
-        `Quadro ${code} criado (offset ${offset}) ✅`
-      ); */
-    }
-  });
-</script>
-
-
-
+            museuEl.sceneEl.appendChild(hit);
+          }
+        });
+      </script>
 
       <!-- O teu JS -->
       <script type="module" src="src/js/app.js"></script>

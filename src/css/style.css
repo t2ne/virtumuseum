@@ -37,6 +37,15 @@ body {
   pointer-events: none;
 }
 
+.ui__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  background: rgba(6, 6, 10, 0.92);
+  display: none;
+  pointer-events: auto;
+}
+
 .ui__bar {
   display: flex;
   gap: 8px;
@@ -209,17 +218,7 @@ input:not([type]) {
   position: fixed;
   inset: 0;
   z-index: 20;
-  background: radial-gradient(
-      1200px 700px at 30% 30%,
-      rgba(124, 92, 255, 0.18),
-      transparent 60%
-    ),
-    radial-gradient(
-      900px 600px at 80% 20%,
-      rgba(40, 215, 161, 0.12),
-      transparent 55%
-    ),
-    rgba(6, 6, 10, 0.92);
+  background: rgba(0, 0, 0, 1);
   display: grid;
   place-items: center;
   padding: 18px;
@@ -270,7 +269,7 @@ input:not([type]) {
 .infoCard {
   position: fixed;
   left: 50%;
-  bottom: 74px;
+  bottom: 24px;
   transform: translateX(-50%);
   z-index: 15;
   width: min(640px, calc(100vw - 24px));
@@ -287,6 +286,15 @@ input:not([type]) {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+.infoCard__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.infoCard__action {
+  padding: 8px 10px;
+  border-radius: 12px;
 }
 .infoCard__title {
   font-weight: 900;
@@ -317,6 +325,23 @@ input:not([type]) {
   font-size: 12px;
 }
 
+.infoCard.is-collapsed {
+  bottom: 16px;
+}
+
+body.is-tour .infoCard:not(.is-collapsed) {
+  bottom: 74px;
+}
+
+body.is-tour .infoCard.is-collapsed {
+  bottom: 74px;
+}
+.infoCard.is-collapsed .infoCard__img,
+.infoCard.is-collapsed .infoCard__desc,
+.infoCard.is-collapsed .infoCard__hint {
+  display: none !important;
+}
+
 /* HUD minimal */
 .ui.is-minimal .ui__panel:not(.is-open) {
   display: none !important;
@@ -342,5 +367,3 @@ input:not([type]) {
 .ui.is-hud-off .tourNav {
   display: none !important;
 }
-
-

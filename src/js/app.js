@@ -44,6 +44,43 @@ let suppressTeleportUntilMs = 0;
 
 let experienceMode = "welcome"; // "welcome" | "explore" | "tour"
 
+function syncBodyModeClasses() {
+  try {
+    document.body.classList.toggle("is-tour", experienceMode === "tour");
+  } catch {
+    // noop
+  }
+}
+
+const AMBIENT_URL = "src/assets/audio/jazz.mp3";
+
+let infoCardCollapsed = false;
+let infoCardImageHidden = false;
+
+const movementKeysDown = new Set();
+
+function isInfoCardOpen() {
+  return !$("#infoCard")?.classList.contains("is-hidden");
+}
+
+function setInfoCardCollapsed(collapsed) {
+  infoCardCollapsed = !!collapsed;
+  $("#infoCard")?.classList.toggle("is-collapsed", infoCardCollapsed);
+  const btn = $("#btnInfoToggle");
+  if (btn) btn.textContent = infoCardCollapsed ? "Mostrar" : "Ocultar";
+}
+
+function setInfoCardImageHidden(hidden) {
+  infoCardImageHidden = !!hidden;
+  // re-aplica visibilidade ao elemento img quando houver src
+  const img = $("#infoCardImg");
+  if (!img) return;
+  const hasSrc = !!img.getAttribute("src");
+  img.classList.toggle("is-hidden", !hasSrc || infoCardImageHidden);
+  const btn = $("#btnInfoImgToggle");
+  if (btn) btn.textContent = infoCardImageHidden ? "Imagem: OFF" : "Imagem: ON";
+}
+
 const PAINTINGS_URL = "src/data/paintings.json";
 let paintingsByCodePromise = null;
 
@@ -108,7 +145,9 @@ async function openPaintingInfoByCode(code) {
   showInfoCard(
     title || `Quadro ${c}`,
     desc || "",
-    experienceMode === "tour" ? "Usa ← / → para navegar. (Esc termina a visita)" : ""
+    experienceMode === "tour"
+      ? "Usa ← / → para navegar. (Esc termina a visita)"
+      : ""
   );
 
   // opcional: respeitar a opção TTS do user
@@ -123,7 +162,6 @@ async function openPaintingInfoByCode(code) {
 // expõe para poderes chamar a partir do script que cria os quadros/hitboxes
 window.VirtuMuseum = window.VirtuMuseum || {};
 window.VirtuMuseum.openPaintingInfoByCode = openPaintingInfoByCode;
-
 
 function imageUrlForPainting(p) {
   const type = String(p?.type || "")
@@ -243,36 +281,6 @@ function safeJsonParse(text, fallback) {
   }
 }
 
-function loadStopOverrides() {
-  return safeJsonParse(
-    localStorage.getItem("virtumuseum.stopOverrides") || "",
-    {}
-  );
-}
-
-function saveStopOverrides(obj) {
-  try {
-    localStorage.setItem(
-      "virtumuseum.stopOverrides",
-      JSON.stringify(obj || {})
-    );
-  } catch {}
-}
-
-function applyStopOverrides(stops) {
-  const o = loadStopOverrides();
-  if (!o || typeof o !== "object") return;
-  Object.keys(o).forEach((k) => {
-    const idx = Number(k);
-    if (!Number.isInteger(idx) || idx < 0 || idx >= (stops?.length || 0))
-      return;
-    const patch = o[k];
-    if (!patch || typeof patch !== "object") return;
-    if (typeof patch.pos === "string") stops[idx].pos = patch.pos;
-    if (typeof patch.rot === "string") stops[idx].rot = patch.rot;
-  });
-}
-
 function parseVec3String(v) {
   if (typeof v !== "string") return null;
   const parts = v
@@ -316,7 +324,42 @@ function setZoomFov(fov) {
   const v = clamp(Number(fov) || 80, 30, 90);
   cam.setAttribute("camera", "fov", v);
   localStorage.setItem("virtumuseum.fov", String(v));
-  $("#rngZoom") && ($("#rngZoom").value = String(v));
+  // Slider representa "zoom" (direita = mais zoom), mas internamente guardamos FOV.
+  const sliderV = clamp(120 - v, 30, 90);
+  $("#rngZoom") && ($("#rngZoom").value = String(sliderV));
+}
+
+function setZoomFromSlider(sliderValue) {
+  const sv = clamp(Number(sliderValue) || 60, 30, 90);
+  const fov = clamp(120 - sv, 30, 90);
+  setZoomFov(fov);
+}
+
+function resetWASDVelocity() {
+  const rig = $("#rig");
+  const wasd = rig?.components?.["wasd-controls"];
+  const v = wasd?.velocity;
+  if (!v) return;
+  v.x = 0;
+  v.y = 0;
+  v.z = 0;
+}
+
+const START_RIG_POS = "0 0 4";
+const START_RIG_ROT = "0 0 0";
+const START_CAM_ROT = "0 0 0";
+
+function hardResetUserPose() {
+  const rig = $("#rig");
+  if (rig) {
+    rig.removeAttribute("animation__pos");
+    rig.removeAttribute("animation__rot");
+    rig.setAttribute("position", START_RIG_POS);
+    rig.setAttribute("rotation", START_RIG_ROT);
+  }
+  $("#cam")?.setAttribute("rotation", START_CAM_ROT);
+  movementKeysDown.clear();
+  resetWASDVelocity();
 }
 
 // ---------- Áudio (WebAudio) ----------
@@ -325,7 +368,10 @@ class AudioEngine {
     this.ctx = null;
     this.master = null;
     this.ambient = null;
+    this.ambientBuffer = null;
     this.volume = 0.6;
+    this._ambientStartPromise = null;
+    this._ambientStopRequested = false;
   }
 
   async ensure() {
@@ -343,61 +389,85 @@ class AudioEngine {
     if (this.master) this.master.gain.value = this.volume;
   }
 
-  // Música ambiente: 2 osciladores + LFO suave
-  async startAmbient() {
+  async _loadAmbientBuffer() {
     await this.ensure();
-    if (this.ambient) return;
+    if (this.ambientBuffer) return this.ambientBuffer;
+    const r = await fetch(AMBIENT_URL, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const ab = await r.arrayBuffer();
+    const buf = await this.ctx.decodeAudioData(ab);
+    this.ambientBuffer = buf;
+    return buf;
+  }
 
-    const base = this.ctx.createOscillator();
-    base.type = "sine";
-    base.frequency.value = 220;
+  // Música ambiente: jazz.mp3 (loop)
+  async startAmbient() {
+    if (this.ambient?.src) return;
+    if (this._ambientStartPromise) return this._ambientStartPromise;
 
-    const harm = this.ctx.createOscillator();
-    harm.type = "sine";
-    harm.frequency.value = 330;
+    this._ambientStopRequested = false;
 
-    const lfo = this.ctx.createOscillator();
-    lfo.type = "sine";
-    lfo.frequency.value = 0.08;
+    this._ambientStartPromise = (async () => {
+      await this.ensure();
+      // autoplay policies podem suspender o contexto
+      try {
+        if (this.ctx?.state === "suspended") await this.ctx.resume();
+      } catch {}
 
-    const lfoGain = this.ctx.createGain();
-    lfoGain.gain.value = 18;
-    lfo.connect(lfoGain);
-    lfoGain.connect(base.frequency);
+      // double-check after awaits
+      if (this.ambient?.src) return;
 
-    const g = this.ctx.createGain();
-    g.gain.value = 0.0;
+      const buf = await this._loadAmbientBuffer();
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
 
-    // fade in
-    const now = this.ctx.currentTime;
-    g.gain.cancelScheduledValues(now);
-    g.gain.setValueAtTime(0.0, now);
-    g.gain.linearRampToValueAtTime(0.14, now + 2.2);
+      const g = this.ctx.createGain();
+      g.gain.value = 0.0;
+      const now = this.ctx.currentTime;
+      g.gain.cancelScheduledValues(now);
+      g.gain.setValueAtTime(0.0, now);
+      g.gain.linearRampToValueAtTime(0.22, now + 0.8);
 
-    base.connect(g);
-    harm.connect(g);
-    g.connect(this.master);
+      src.connect(g);
+      g.connect(this.master);
+      src.start();
 
-    base.start();
-    harm.start();
-    lfo.start();
+      this.ambient = { src, g };
+      src.onended = () => {
+        if (this.ambient?.src === src) this.ambient = null;
+      };
 
-    this.ambient = { base, harm, lfo, g };
+      if (this._ambientStopRequested) {
+        this.stopAmbient();
+      }
+    })().finally(() => {
+      this._ambientStartPromise = null;
+    });
+
+    return this._ambientStartPromise;
   }
 
   stopAmbient() {
+    this._ambientStopRequested = true;
     if (!this.ambient || !this.ctx) return;
-    const { base, harm, lfo, g } = this.ambient;
+    const { src, g } = this.ambient;
     const now = this.ctx.currentTime;
+
+    // manter referência até efetivamente parar (evita startAmbient duplicar)
     try {
       g.gain.cancelScheduledValues(now);
       g.gain.setValueAtTime(g.gain.value, now);
-      g.gain.linearRampToValueAtTime(0.0, now + 0.7);
-      base.stop(now + 0.8);
-      harm.stop(now + 0.8);
-      lfo.stop(now + 0.8);
+      g.gain.linearRampToValueAtTime(0.0, now + 0.25);
     } catch {}
-    this.ambient = null;
+    try {
+      src.stop(now + 0.26);
+    } catch {
+      // fallback: se falhar o agendamento, tenta parar já
+      try {
+        src.stop();
+      } catch {}
+    }
   }
 
   async chime() {
@@ -527,14 +597,7 @@ AFRAME.registerComponent("gltf-material-fix", {
         });
       });
     });
-  },
-});
-
-AFRAME.registerComponent("print-aim", {
-  schema: { key: { type: "string", default: "p" } },
-  init: function () {
     window.addEventListener("keydown", (e) => {
-      
       if (e.key.toLowerCase() !== this.data.key.toLowerCase()) return;
 
       const rig = $("#rig");
@@ -551,15 +614,20 @@ AFRAME.registerComponent("print-aim", {
       const yawDeg = THREE.MathUtils.radToDeg(Math.atan2(dir.x, dir.z));
 
       console.log(
-        `RIG_POS: "${rp.x.toFixed(2)} ${rp.y.toFixed(2)} ${rp.z.toFixed(2)}"  ` +
-        `CAM_ROT: "${cr.x.toFixed(2)} ${cr.y.toFixed(2)} ${cr.z.toFixed(2)}"  ` +
-        `DIR: "${dir.x.toFixed(3)} ${dir.y.toFixed(3)} ${dir.z.toFixed(3)}"  ` +
-        `YAW: "${yawDeg.toFixed(2)}"`
+        `RIG_POS: "${rp.x.toFixed(2)} ${rp.y.toFixed(2)} ${rp.z.toFixed(
+          2
+        )}"  ` +
+          `CAM_ROT: "${cr.x.toFixed(2)} ${cr.y.toFixed(2)} ${cr.z.toFixed(
+            2
+          )}"  ` +
+          `DIR: "${dir.x.toFixed(3)} ${dir.y.toFixed(3)} ${dir.z.toFixed(
+            3
+          )}"  ` +
+          `YAW: "${yawDeg.toFixed(2)}"`
       );
     });
   },
 });
-
 
 AFRAME.registerComponent("hotspot", {
   schema: {
@@ -669,25 +737,19 @@ AFRAME.registerComponent("tour-guide", {
     const json = (this.data.stopsEl?.textContent || "").trim();
     return json ? safeJsonParse(json, []) : [];
   },
-_loadStops: async function () {
-  try {
-    const url = this.data.stopsUrl || "src/data/tourStops.json";
-    const r = await fetch(url, { cache: "no-store" });
-    console.log("[tour] fetch", url, "status", r.status);
-    const stops = await r.json();
-    this.stops = Array.isArray(stops) ? stops : [];
-  } catch (err) {
-    console.warn("[tour] falhou carregar stops:", err);
-    this.stops = this._readStopsFromDom();
-  }
-
-  console.log("[tour] stops carregados:", this.stops.length, this.stops[0]);
- 
-
-    // aplica overrides persistentes (para corrigir posições/rotações)
-    if (Array.isArray(this.stops) && this.stops.length) {
-      applyStopOverrides(this.stops);
+  _loadStops: async function () {
+    try {
+      const url = this.data.stopsUrl || "src/data/tourStops.json";
+      const r = await fetch(url, { cache: "no-store" });
+      console.log("[tour] fetch", url, "status", r.status);
+      const stops = await r.json();
+      this.stops = Array.isArray(stops) ? stops : [];
+    } catch (err) {
+      console.warn("[tour] falhou carregar stops:", err);
+      this.stops = this._readStopsFromDom();
     }
+
+    console.log("[tour] stops carregados:", this.stops.length, this.stops[0]);
 
     // Enriquecimento via paintings.json (título/descrição/imagem), quando disponível.
     await enrichStopsWithPaintings(this.stops);
@@ -700,27 +762,34 @@ _loadStops: async function () {
   },
 
   start: async function () {
-  if (this.running) return;
-  experienceMode = "tour";
-  this.running = true;
-  this.paused = false;
-  this.idx = 0;
-  this.data.rig?.setAttribute("wasd-controls", "enabled", false);
+    if (this.running) return;
+    experienceMode = "tour";
+    syncBodyModeClasses();
+    this.running = true;
+    this.paused = false;
+    this.idx = 0;
+    this.data.rig?.setAttribute("wasd-controls", "enabled", false);
 
-  try { await this._stopsReady; } catch {}
+    // reset pose para evitar começar "torto" ao mudar de explorar -> tour
+    this.data.rig?.setAttribute("rotation", "0 0 0");
+    $("#cam")?.setAttribute("rotation", "0 0 0");
+    resetWASDVelocity();
 
-  if (!this.stops?.length) {
-    showToast("Visita: não foi possível carregar as paragens.");
-    this.stop();
-    return;
-  }
+    try {
+      await this._stopsReady;
+    } catch {}
 
-  const prevRM = this.reducedMotion;
-  this.reducedMotion = true;   // teleport instantâneo no 1º stop
-  this._goToStop(this.idx);
-  this.reducedMotion = prevRM;
-},
+    if (!this.stops?.length) {
+      showToast("Visita: não foi possível carregar as paragens.");
+      this.stop();
+      return;
+    }
 
+    const prevRM = this.reducedMotion;
+    this.reducedMotion = true; // teleport instantâneo no 1º stop
+    this._goToStop(this.idx);
+    this.reducedMotion = prevRM;
+  },
 
   pause: function () {
     if (!this.running || this.paused) return;
@@ -741,6 +810,7 @@ _loadStops: async function () {
     this.paused = false;
     const leavingTour = experienceMode === "tour";
     if (leavingTour) experienceMode = "explore";
+    syncBodyModeClasses();
     this._clearTimers();
     if (leavingTour)
       this.data.rig?.setAttribute("wasd-controls", "enabled", true);
@@ -823,8 +893,8 @@ _loadStops: async function () {
     }
 
     rig.removeAttribute("animation__pos");
-/*     rig.removeAttribute("animation__rot");
- */    showToast(`Teleport: ${stop.title || "paragem"}`);
+    /*     rig.removeAttribute("animation__rot");
+     */ showToast(`Teleport: ${stop.title || "paragem"}`);
   },
 
   _clearTimers: function () {
@@ -856,145 +926,146 @@ _loadStops: async function () {
   },
 
   _goToStop: function (i) {
-  if (!this.running || this.paused) return;
-  const stop = this.stops[i];
-  if (!stop) {
-    showToast("Paragem inválida.");
-    updateTourNav(true, this.idx, this.stops.length);
-    return;
-  }
+    if (!this.running || this.paused) return;
+    const stop = this.stops[i];
+    if (!stop) {
+      showToast("Paragem inválida.");
+      updateTourNav(true, this.idx, this.stops.length);
+      return;
+    }
 
-  const speed = this.data.speed || 1.0;
-  const moveDur = (stop.moveDur ?? 1500) / speed;
-  const lookDur = (stop.lookDur ?? 600) / speed;
-  const wait = (stop.wait ?? 1200) / speed;
+    const speed = this.data.speed || 1.0;
+    const moveDur = (stop.moveDur ?? 1500) / speed;
+    const lookDur = (stop.lookDur ?? 600) / speed;
+    const wait = (stop.wait ?? 1200) / speed;
 
-  const rig = this.data.rig;
-  if (!rig) return;
-  const bounds = getBoundsForRig(rig);
+    const rig = this.data.rig;
+    if (!rig) return;
+    const bounds = getBoundsForRig(rig);
 
-  // Inter-state: enquanto muda de paragem
-  const destTitle = stop.title ? `A caminho: ${stop.title}` : "A mudar de paragem…";
-  setInfoCardTransition(true, destTitle);
-  $("#btnTourPrev")?.setAttribute("disabled", "true");
-  $("#btnTourNext")?.setAttribute("disabled", "true");
+    // Inter-state: enquanto muda de paragem
+    const destTitle = stop.title
+      ? `A caminho: ${stop.title}`
+      : "A mudar de paragem…";
+    setInfoCardTransition(true, destTitle);
+    $("#btnTourPrev")?.setAttribute("disabled", "true");
+    $("#btnTourNext")?.setAttribute("disabled", "true");
 
-  // -----------------------------
-  // 1) MOVIMENTO / TELEPORT (POS)
-  // -----------------------------
-  if (stop.pos) {
-    const parsed = parseVec3String(stop.pos);
-    if (!parsed) {
-      showToast("Paragem com posição inválida.");
-    } else {
-      const clamped = clampPosToBounds(parsed, bounds);
-      const toPos = vec3ToString(clamped);
-
-      if (this.reducedMotion) {
-        rig.setAttribute("position", toPos);
-        rig.removeAttribute("animation__pos");
+    // -----------------------------
+    // 1) MOVIMENTO / TELEPORT (POS)
+    // -----------------------------
+    if (stop.pos) {
+      const parsed = parseVec3String(stop.pos);
+      if (!parsed) {
+        showToast("Paragem com posição inválida.");
       } else {
-        rig.setAttribute("animation__pos", {
-          property: "position",
-          to: toPos,
-          dur: moveDur,
+        const clamped = clampPosToBounds(parsed, bounds);
+        const toPos = vec3ToString(clamped);
+
+        if (this.reducedMotion) {
+          rig.setAttribute("position", toPos);
+          rig.removeAttribute("animation__pos");
+        } else {
+          rig.setAttribute("animation__pos", {
+            property: "position",
+            to: toPos,
+            dur: moveDur,
+            easing: "easeInOutQuad",
+          });
+        }
+      }
+    }
+    // -----------------------------
+    // 2) ROTAÇÃO (target OU rot)
+    // -----------------------------
+    let rotStr = null;
+
+    if (stop.target) {
+      // se tens target, mantém yaw para o alvo (sem inclinar)
+      const targetEl = document.querySelector(stop.target);
+      if (targetEl) rotStr = this._yawToTarget(rig, targetEl); // "0 Y 0"
+    } else if (stop.rot) {
+      const r = parseVec3String(stop.rot);
+      // UX: evitar inclinação (roll/pitch) -> usa apenas yaw
+      if (r) rotStr = `0 ${r.y} 0`;
+    }
+
+    if (rotStr) {
+      if (this.reducedMotion) {
+        rig.setAttribute("rotation", rotStr);
+        rig.removeAttribute("animation__rot");
+      } else {
+        rig.setAttribute("animation__rot", {
+          property: "rotation",
+          to: rotStr,
+          dur: lookDur,
           easing: "easeInOutQuad",
         });
       }
     }
-  }
-// -----------------------------
-// 2) ROTAÇÃO (target OU rot)
-// -----------------------------
-let rotStr = null;
 
-if (stop.target) {
-  // se tens target, mantém yaw para o alvo (sem inclinar)
-  const targetEl = document.querySelector(stop.target);
-  if (targetEl) rotStr = this._yawToTarget(rig, targetEl); // "0 Y 0"
-} else if (stop.rot) {
-  const r = parseVec3String(stop.rot);
-  if (r) rotStr = `${r.x} ${r.y} ${r.z}`; // ✅ agora usa X Y Z
-}
+    const afterMove = this.reducedMotion ? 0 : moveDur;
+    const minInterDelay = afterMove === 0 ? 80 : 0;
 
-if (rotStr) {
-  if (this.reducedMotion) {
-    rig.setAttribute("rotation", rotStr);
-    rig.removeAttribute("animation__rot");
-  } else {
-    rig.setAttribute("animation__rot", {
-      property: "rotation",
-      to: rotStr,
-      dur: lookDur,
-      easing: "easeInOutQuad",
-    });
-  }
-}
-
-
-  const afterMove = this.reducedMotion ? 0 : moveDur;
-  const minInterDelay = afterMove === 0 ? 80 : 0;
-
-  // ao chegar: texto/áudio
-  const t1 = setTimeout(() => {
-    if (!this.running || this.paused) return;
-
-setInfoCardTransition(false);
-
-// Em vez de abrir a descrição completa automaticamente:
-setInfoCardImage("", "");
-showInfoCard(
-  stop.title || "Paragem",
-  "",
-  "Clica no quadro para ver a informação."
-);
-
-// áudio do stop (se estiveres a usar stop.audio) podes manter ou remover:
-if (stop.audio && this.data.narrator) {
-  this.data.narrator.removeAttribute("sound");
-  this.data.narrator.setAttribute("sound", {
-    src: stop.audio,
-    autoplay: true,
-    positional: false,
-    volume: 1.0,
-  });
-} else {
-  this.data.narrator?.removeAttribute("sound");
-}
-
-updateTourNav(true, i, this.stops.length);
-    this._applyPanel(stop);
-
-    // áudio
-    if (stop.audio && this.data.narrator) {
-      this.data.narrator.removeAttribute("sound");
-      this.data.narrator.setAttribute("sound", {
-        src: stop.audio,
-        autoplay: true,
-        positional: false,
-        volume: 1.0,
-      });
-    } else {
-      this.data.narrator?.removeAttribute("sound");
-    }
-
-    // NÃO remover animation__rot aqui (senão “mata” a rotação do stop)
-    updateTourNav(true, i, this.stops.length);
-  }, afterMove + minInterDelay);
-
-  // próximo stop (apenas se autoAdvance = true)
-  if (this.data.autoAdvance) {
-    const t2 = setTimeout(() => {
+    // ao chegar: texto/áudio
+    const t1 = setTimeout(() => {
       if (!this.running || this.paused) return;
-      this.idx = i + 1;
-      this._goToStop(this.idx);
-    }, afterMove + (this.reducedMotion ? 0 : lookDur) + wait);
-    this.timers.push(t1, t2);
-  } else {
-    this.timers.push(t1);
-  }
-},
 
+      setInfoCardTransition(false);
+
+      // Em vez de abrir a descrição completa automaticamente:
+      setInfoCardImage("", "");
+      showInfoCard(
+        stop.title || "Paragem",
+        "",
+        "Clica no quadro para ver a informação."
+      );
+
+      // áudio do stop (se estiveres a usar stop.audio) podes manter ou remover:
+      if (stop.audio && this.data.narrator) {
+        this.data.narrator.removeAttribute("sound");
+        this.data.narrator.setAttribute("sound", {
+          src: stop.audio,
+          autoplay: true,
+          positional: false,
+          volume: 1.0,
+        });
+      } else {
+        this.data.narrator?.removeAttribute("sound");
+      }
+
+      updateTourNav(true, i, this.stops.length);
+      this._applyPanel(stop);
+
+      // áudio
+      if (stop.audio && this.data.narrator) {
+        this.data.narrator.removeAttribute("sound");
+        this.data.narrator.setAttribute("sound", {
+          src: stop.audio,
+          autoplay: true,
+          positional: false,
+          volume: 1.0,
+        });
+      } else {
+        this.data.narrator?.removeAttribute("sound");
+      }
+
+      // NÃO remover animation__rot aqui (senão “mata” a rotação do stop)
+      updateTourNav(true, i, this.stops.length);
+    }, afterMove + minInterDelay);
+
+    // próximo stop (apenas se autoAdvance = true)
+    if (this.data.autoAdvance) {
+      const t2 = setTimeout(() => {
+        if (!this.running || this.paused) return;
+        this.idx = i + 1;
+        this._goToStop(this.idx);
+      }, afterMove + (this.reducedMotion ? 0 : lookDur) + wait);
+      this.timers.push(t1, t2);
+    } else {
+      this.timers.push(t1);
+    }
+  },
 });
 
 AFRAME.registerComponent("teleport-surface", {
@@ -1153,7 +1224,8 @@ function syncMovementLock() {
   if (!rig) return;
 
   // ✅ bloquear SEMPRE no welcome e quando o menu está aberto
-  const mustLock = welcomeVisible || experienceMode === "welcome" || menuOpen || inTour;
+  const mustLock =
+    welcomeVisible || experienceMode === "welcome" || menuOpen || inTour;
 
   rig.setAttribute("wasd-controls", "enabled", !mustLock);
 
@@ -1170,12 +1242,11 @@ function syncMovementLock() {
   }
 }
 
-
 function setMenuOpen(open) {
   const panel = $("#menuPanel");
   if (!panel) return;
-  document.body.classList.toggle("is-menu-open", open);
-  $("#menuBackdrop")?.setAttribute("aria-hidden", String(!open));
+  // Backdrop desativado (menu não deve escurecer o ecrã).
+  $("#menuBackdrop")?.setAttribute("aria-hidden", "true");
 
   // Evita warning: aria-hidden num ancestor que ainda retém focus.
   if (!open) {
@@ -1192,8 +1263,7 @@ function setMenuOpen(open) {
 
   panel.classList.toggle("is-open", open);
   panel.setAttribute("aria-hidden", String(!open));
-    syncMovementLock();
-
+  syncMovementLock();
 }
 
 function toggleMenu() {
@@ -1202,8 +1272,6 @@ function toggleMenu() {
   setMenuOpen(!panel.classList.contains("is-open"));
   syncMovementLock();
 }
-
-
 
 function setUIVisible(visible) {
   const ui = $("#uiRoot");
@@ -1219,9 +1287,6 @@ function setWelcomeVisible(visible) {
 
 function backToWelcome() {
   try {
-    audio.stopAmbient();
-  } catch {}
-  try {
     speechSynthesis?.cancel?.();
   } catch {}
 
@@ -1233,6 +1298,9 @@ function backToWelcome() {
     tour?.stop?.();
   } catch {}
 
+  // reset total do utilizador para a posição inicial
+  hardResetUserPose();
+
   setTeleportEnabled(false);
   updateTourNav(false);
   hideInfoCard();
@@ -1240,9 +1308,18 @@ function backToWelcome() {
   setUIVisible(false);
   setWelcomeVisible(true);
   experienceMode = "welcome";
+  syncBodyModeClasses();
   updateTourNav(false);
   syncMovementLock();
 
+  // sincroniza toggles do welcome e garante que a música segue a preferência
+  const ambOn = localStorage.getItem("virtumuseum.ambient") === "1";
+  $("#chkWelcomeAmbient") && ($("#chkWelcomeAmbient").checked = ambOn);
+  $("#chkAmbient") && ($("#chkAmbient").checked = ambOn);
+  try {
+    if (ambOn) audio.startAmbient();
+    else audio.stopAmbient();
+  } catch {}
 }
 
 function setMinimalHUD(hudOff) {
@@ -1259,7 +1336,10 @@ function setMinimalHUD(hudOff) {
     btn.textContent = visible ? "HUD: ON" : "HUD: OFF";
     btn.setAttribute("aria-pressed", visible ? "true" : "false");
   }
-  if (hudOff) setMenuOpen(false);
+  if (hudOff) {
+    setMenuOpen(false);
+    hideInfoCard();
+  }
   dlog("hud", { visible: !hudOff });
 }
 
@@ -1303,7 +1383,8 @@ function setInfoCardImage(url, alt) {
   }
   img.src = u;
   img.alt = alt || "";
-  img.classList.remove("is-hidden");
+  // respeita o toggle do utilizador
+  setInfoCardImageHidden(infoCardImageHidden);
 }
 
 function setInfoCardTransition(active, title = "A mudar…") {
@@ -1320,6 +1401,8 @@ function setInfoCardTransition(active, title = "A mudar…") {
 function hideInfoCard() {
   $("#infoCard")?.classList.add("is-hidden");
   setInfoCardImage("", "");
+  setInfoCardCollapsed(false);
+  setInfoCardImageHidden(false);
 }
 
 function showToast(text) {
@@ -1407,8 +1490,14 @@ function blockMoveKeys(e, { allowLeftRight = false } = {}) {
 
   // WASD + setas
   const isMove =
-    k === "w" || k === "a" || k === "s" || k === "d" ||
-    k === "arrowup" || k === "arrowdown" || k === "arrowleft" || k === "arrowright";
+    k === "w" ||
+    k === "a" ||
+    k === "s" ||
+    k === "d" ||
+    k === "arrowup" ||
+    k === "arrowdown" ||
+    k === "arrowleft" ||
+    k === "arrowright";
 
   if (!isMove) return false;
 
@@ -1419,7 +1508,6 @@ function blockMoveKeys(e, { allowLeftRight = false } = {}) {
   e.stopPropagation?.();
   return true;
 }
-
 
 function setupUI() {
   $("#btnMenu")?.addEventListener("click", toggleMenu);
@@ -1434,76 +1522,30 @@ function setupUI() {
 
   $("#btnBackToWelcome")?.addEventListener("click", backToWelcome);
 
-  $("#btnSaveStopOverride")?.addEventListener("click", async () => {
-    const tourC = $("#tour")?.components?.["tour-guide"];
-    const rig = $("#rig");
-    if (!tourC || !rig) return;
-
-    const idx =
-      experienceMode === "tour"
-        ? tourC.idx
-        : Number(localStorage.getItem("virtumuseum.lastStopIdx") || "-1");
-
-    if (
-      !Number.isInteger(idx) ||
-      idx < 0 ||
-      idx >= (tourC.stops?.length || 0)
-    ) {
-      showToast("Escolhe uma paragem (lista) ou inicia a visita.");
-      return;
-    }
-
-    const p = rig.getAttribute("position");
-    const r = rig.getAttribute("rotation");
-    const pos = `${Number(p.x).toFixed(2)} 0.00 ${Number(p.z).toFixed(2)}`;
-    const rot = `0 ${Number(r.y).toFixed(2)} 0`;
-
-    const overrides = loadStopOverrides();
-    overrides[idx] = { pos, rot };
-    saveStopOverrides(overrides);
-
-    // aplica imediatamente (em memória)
-    if (tourC.stops?.[idx]) {
-      tourC.stops[idx].pos = pos;
-      tourC.stops[idx].rot = rot;
-    }
-    window.dispatchEvent(
-      new CustomEvent("tour:stopsLoaded", { detail: { stops: tourC.stops } })
-    );
-
-    showToast(`Ajuste guardado na paragem ${idx + 1}.`);
-  });
-
-  $("#btnClearStopOverrides")?.addEventListener("click", () => {
-    localStorage.removeItem("virtumuseum.stopOverrides");
-    showToast("Ajustes removidos.");
-
-    // recarrega stops (sem overrides)
-    const tourEl = $("#tour");
-    const tourC = tourEl?.components?.["tour-guide"];
-    if (tourC) {
-      tourC._stopsReady = tourC._loadStops();
-    }
-  });
-
-  $("#btnCopyStopOverrides")?.addEventListener("click", async () => {
-    const text = JSON.stringify(loadStopOverrides(), null, 2);
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast("Ajustes copiados.");
-    } catch {
-      console.log(text);
-      showToast("Ajustes no console (clipboard indisponível).");
-    }
-  });
-
   $("#btnInfoClose")?.addEventListener("click", () => hideInfoCard());
+  $("#btnInfoToggle")?.addEventListener("click", () =>
+    setInfoCardCollapsed(!infoCardCollapsed)
+  );
+  $("#btnInfoImgToggle")?.addEventListener("click", () =>
+    setInfoCardImageHidden(!infoCardImageHidden)
+  );
 
   // Welcome buttons
   $("#btnEnterExplore")?.addEventListener("click", () =>
     enterExperience("explore")
   );
   $("#btnEnterTour")?.addEventListener("click", () => enterExperience("tour"));
+
+  // Welcome: música ambiente deve controlar playback (e sincronizar com menu)
+  $("#chkWelcomeAmbient")?.addEventListener("change", async (e) => {
+    const on = !!e.target.checked;
+    localStorage.setItem("virtumuseum.ambient", on ? "1" : "0");
+    if ($("#chkAmbient")) $("#chkAmbient").checked = on;
+    try {
+      if (on) await audio.startAmbient();
+      else audio.stopAmbient();
+    } catch {}
+  });
 
   // teleport por clique no chão
   setTeleportEnabled(false);
@@ -1518,8 +1560,7 @@ function setupUI() {
   $("#btnPhoto")?.addEventListener("click", () => takePhoto());
   $("#btnFlashlight")?.addEventListener("click", () => toggleFlashlight());
   $("#btnReset")?.addEventListener("click", () => {
-    $("#rig")?.setAttribute("position", "0 0 3");
-    $("#rig")?.setAttribute("rotation", "0 0 0");
+    hardResetUserPose();
     setMode("museum");
     hideInfoCard();
   });
@@ -1561,6 +1602,7 @@ function setupUI() {
   chkAmbient?.addEventListener("change", async (e) => {
     const on = !!e.target.checked;
     localStorage.setItem("virtumuseum.ambient", on ? "1" : "0");
+    if ($("#chkWelcomeAmbient")) $("#chkWelcomeAmbient").checked = on;
     try {
       if (on) await audio.startAmbient();
       else audio.stopAmbient();
@@ -1581,7 +1623,8 @@ function setupUI() {
   if (chkTTS) chkTTS.checked = ttsOn;
   if (chkRM) chkRM.checked = rmOn;
   if (rngSpeed) rngSpeed.value = String(clamp(speedPct, 50, 150));
-  if (rngZoom) rngZoom.value = String(clamp(savedFov, 30, 90));
+  // slider representa zoom; o valor guardado é FOV
+  if (rngZoom) rngZoom.value = String(clamp(120 - savedFov, 30, 90));
   setZoomFov(savedFov || 80);
 
   let tour = null;
@@ -1618,7 +1661,7 @@ function setupUI() {
     applyTourOptions();
   });
 
-  rngZoom?.addEventListener("input", (e) => setZoomFov(e.target.value));
+  rngZoom?.addEventListener("input", (e) => setZoomFromSlider(e.target.value));
 
   // zoom via wheel (fora de UI)
   window.addEventListener(
@@ -1717,23 +1760,35 @@ function setupUI() {
   window.addEventListener(
     "keydown",
     (e) => {
-       const menuOpen = $("#menuPanel")?.classList.contains("is-open");
-    const welcomeVisible = !$("#welcome")?.classList.contains("is-hidden");
-    if (menuOpen || welcomeVisible || experienceMode === "welcome") {
-      if (blockMoveKeys(e)) return;
-    }
+      const menuOpen = $("#menuPanel")?.classList.contains("is-open");
+      const welcomeVisible = !$("#welcome")?.classList.contains("is-hidden");
+      if (menuOpen || welcomeVisible || experienceMode === "welcome") {
+        if (blockMoveKeys(e)) return;
+      }
 
       const tourC = $("#tour")?.components?.["tour-guide"];
-      if (!tourC) return;
+      const inTourMode = experienceMode === "tour" || !!tourC?.running;
 
-       if (inTourMode) {
-      if (blockMoveKeys(e, { allowLeftRight: true })) return;
-    }
+      // Se o utilizador estiver em modo tour, nunca deixar teclas de movimento (exceto ←/→ para navegar)
+      if (inTourMode && blockMoveKeys(e, { allowLeftRight: true })) return;
 
       const infoOpen = !$("#infoCard")?.classList.contains("is-hidden");
       const key = e.key;
       const keyLower = String(key || "").toLowerCase();
-      const inTourMode = experienceMode === "tour" || tourC.running;
+
+      // tracking para remover "sliding" do wasd-controls
+      if (
+        keyLower === "w" ||
+        keyLower === "a" ||
+        keyLower === "s" ||
+        keyLower === "d" ||
+        key === "ArrowUp" ||
+        key === "ArrowDown" ||
+        key === "ArrowLeft" ||
+        key === "ArrowRight"
+      ) {
+        movementKeysDown.add(keyLower || key);
+      }
 
       // Se o info card estiver aberto, não deixar as setas moverem o utilizador.
       // (Em tour, setas esquerda/direita continuam a navegar.)
@@ -1812,8 +1867,10 @@ function setupUI() {
       if (e.key === "n" || e.key === "N") tourC.next();
 
       // navegação da visita manual (fallback; normalmente já foi tratado acima)
-      if (e.key === "ArrowRight") tourC.next();
-      if (e.key === "ArrowLeft") tourC.prev();
+      if (tourC) {
+        if (e.key === "ArrowRight") tourC.next();
+        if (e.key === "ArrowLeft") tourC.prev();
+      }
 
       // navegação alternativa (Q/E)
       if (e.key === "q" || e.key === "Q") tourC.prev();
@@ -1822,6 +1879,29 @@ function setupUI() {
       // foto / lanterna
       if (e.key === "c" || e.key === "C") takePhoto();
       if (e.key === "f" || e.key === "F") toggleFlashlight();
+    },
+    { capture: true }
+  );
+
+  // keyup: remove inércia / "sliding"
+  window.addEventListener(
+    "keyup",
+    (e) => {
+      const key = e.key;
+      const keyLower = String(key || "").toLowerCase();
+      if (
+        keyLower === "w" ||
+        keyLower === "a" ||
+        keyLower === "s" ||
+        keyLower === "d" ||
+        key === "ArrowUp" ||
+        key === "ArrowDown" ||
+        key === "ArrowLeft" ||
+        key === "ArrowRight"
+      ) {
+        movementKeysDown.delete(keyLower || key);
+        if (movementKeysDown.size === 0) resetWASDVelocity();
+      }
     },
     { capture: true }
   );
@@ -1838,20 +1918,6 @@ function setupUI() {
   );
   $("#rngMoveSpeed")?.addEventListener("input", (e) =>
     setMoveSpeed(e.target.value)
-  );
-
-  // Primeira interação: se ambient estava on, tenta ligar aqui (autoplay policy)
-  document.addEventListener(
-    "pointerdown",
-    async () => {
-      const on = $("#chkAmbient")?.checked;
-      if (on) {
-        try {
-          await audio.startAmbient();
-        } catch {}
-      }
-    },
-    { once: true }
   );
 
   // restaura lanterna
@@ -1913,13 +1979,15 @@ function toggleFlashlight(force) {
 function setMoveSpeed(accel) {
   const rig = $("#rig");
   if (!rig) return;
-  const a = clamp(Number(accel) || 2, 1, 6);
-  rig.setAttribute("wasd-controls", "acceleration", a);
-  localStorage.setItem("virtumuseum.moveSpeed", String(a));
+  const uiVal = clamp(Number(accel) || 2, 1, 6);
+  // O museu está escalado (0.01), portanto precisamos de aceleração bem menor.
+  const internal = clamp(uiVal * 0.12, 0.08, 0.9);
+  rig.setAttribute("wasd-controls", "acceleration", internal);
+  localStorage.setItem("virtumuseum.moveSpeed", String(uiVal));
   const r1 = $("#rngMoveSpeed");
   const r2 = $("#rngMoveSpeedMenu");
-  if (r1) r1.value = String(a);
-  if (r2) r2.value = String(a);
+  if (r1) r1.value = String(uiVal);
+  if (r2) r2.value = String(uiVal);
 }
 
 async function enterExperience(mode) {
@@ -1951,6 +2019,7 @@ async function enterExperience(mode) {
   // Explorar: WASD on; Tour: WASD off e navega com setas
   if (mode === "explore") {
     experienceMode = "explore";
+    syncBodyModeClasses();
     tour.stop();
     setTeleportEnabled(false);
     rig.setAttribute("wasd-controls", "enabled", true);
@@ -1961,13 +2030,13 @@ async function enterExperience(mode) {
     // garante reset do estado anterior sem efeitos colaterais
     tour.stop();
     experienceMode = "tour";
+    syncBodyModeClasses();
     rig.setAttribute("wasd-controls", "enabled", false);
     setTeleportEnabled(false);
     tour.start();
     updateTourNav(true, tour.idx, tour.stops.length);
   }
   syncMovementLock();
-
 }
 
 function showHelp() {
