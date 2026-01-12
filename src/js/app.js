@@ -345,19 +345,87 @@ function resetWASDVelocity() {
   v.z = 0;
 }
 
-const START_RIG_POS = "0 0 4";
-const START_RIG_ROT = "0 0 0";
-const START_CAM_ROT = "0 0 0";
+// Spawn pose (capturada no arranque, antes do utilizador se mover).
+// Isto é o "spawn" original do jogo e deve ser o mesmo sempre que re-entras.
+const FALLBACK_START_RIG_POS = "0 0 4";
+const FALLBACK_START_RIG_ROT = "0 0 0";
+const FALLBACK_START_CAM_ROT = "0 0 0";
+
+let spawnPoseCaptured = false;
+let SPAWN_RIG_POS = FALLBACK_START_RIG_POS;
+let SPAWN_RIG_ROT = FALLBACK_START_RIG_ROT;
+let SPAWN_CAM_ROT = FALLBACK_START_CAM_ROT;
+
+function captureSpawnPoseOnce() {
+  if (spawnPoseCaptured) return;
+  const rig = $("#rig");
+  const cam = $("#cam");
+
+  // Se ainda não existe, voltamos a tentar mais tarde.
+  if (!rig || !cam) return;
+
+  try {
+    const rp = rig.getAttribute("position");
+    if (rp && [rp.x, rp.y, rp.z].every((n) => Number.isFinite(n))) {
+      SPAWN_RIG_POS = `${rp.x} ${rp.y} ${rp.z}`;
+    }
+  } catch {}
+
+  try {
+    const rr = rig.getAttribute("rotation");
+    if (rr && [rr.x, rr.y, rr.z].every((n) => Number.isFinite(n))) {
+      SPAWN_RIG_ROT = `${rr.x} ${rr.y} ${rr.z}`;
+    }
+  } catch {}
+
+  try {
+    const cr = cam.getAttribute("rotation");
+    if (cr && [cr.x, cr.y, cr.z].every((n) => Number.isFinite(n))) {
+      SPAWN_CAM_ROT = `${cr.x} ${cr.y} ${cr.z}`;
+    }
+  } catch {}
+
+  spawnPoseCaptured = true;
+}
 
 function hardResetUserPose() {
   const rig = $("#rig");
   if (rig) {
     rig.removeAttribute("animation__pos");
     rig.removeAttribute("animation__rot");
-    rig.setAttribute("position", START_RIG_POS);
-    rig.setAttribute("rotation", START_RIG_ROT);
+    rig.setAttribute("position", SPAWN_RIG_POS);
+    rig.setAttribute("rotation", SPAWN_RIG_ROT);
+
+    // Também força o object3D já (evita 1-2 frames em que o estado antigo ainda aparece)
+    try {
+      const p = parseVec3String(SPAWN_RIG_POS);
+      if (p) rig.object3D.position.set(p.x, p.y, p.z);
+    } catch {}
+    try {
+      const r = parseVec3String(SPAWN_RIG_ROT);
+      if (r) {
+        rig.object3D.rotation.set(
+          THREE.MathUtils.degToRad(r.x),
+          THREE.MathUtils.degToRad(r.y),
+          THREE.MathUtils.degToRad(r.z)
+        );
+      }
+    } catch {}
   }
-  $("#cam")?.setAttribute("rotation", START_CAM_ROT);
+
+  const cam = $("#cam");
+  cam?.setAttribute("rotation", SPAWN_CAM_ROT);
+
+  // Reset real do look-controls (yaw/pitch internos). Sem isto, o user pode
+  // re-entrar e ficar com orientação/estado antigo (e em alguns browsers isso
+  // também dá a sensação de "não resetou").
+  try {
+    const lc = cam?.components?.["look-controls"];
+    if (lc?.yawObject?.rotation) lc.yawObject.rotation.y = 0;
+    if (lc?.pitchObject?.rotation) lc.pitchObject.rotation.x = 0;
+    if (cam?.object3D?.rotation) cam.object3D.rotation.set(0, 0, 0);
+  } catch {}
+
   movementKeysDown.clear();
   resetWASDVelocity();
 }
@@ -1300,9 +1368,11 @@ function backToWelcome() {
 
   // reset total do utilizador para a posição inicial
   hardResetUserPose();
+  // Alguns componentes (ex: controls) podem aplicar o estado no frame seguinte.
+  // Força de novo no próximo frame para garantir que a posição efetivamente salta.
+  requestAnimationFrame(() => hardResetUserPose());
 
   setTeleportEnabled(false);
-  updateTourNav(false);
   hideInfoCard();
   setMenuOpen(false);
   setUIVisible(false);
@@ -1720,8 +1790,10 @@ function setupUI() {
     const tourC = $("#tour")?.components?.["tour-guide"];
     if (!tourC) return;
 
-    if (t.includes("iniciar") || t.includes("comecar")) tourC.start();
-    else if (t.includes("pausar")) tourC.pause();
+    if (t.includes("iniciar") || t.includes("comecar")) {
+      // Start "a sério": sai do welcome/menu e reseta para o spawn.
+      enterExperience("tour");
+    } else if (t.includes("pausar")) tourC.pause();
     else if (t.includes("retomar") || t.includes("continuar")) tourC.resume();
     else if (t.includes("parar") || t.includes("sair") || t.includes("stop"))
       tourC.stop();
@@ -1859,7 +1931,13 @@ function setupUI() {
       if (e.key === "Escape") tourC.stop();
 
       // iniciar / pausar / próxima (conforme UI/hints)
-      if (e.key === "Enter") tourC.start();
+      if (e.key === "Enter") {
+        // Start "a sério" para não herdar posição da sessão anterior.
+        // Mantém semântica: Enter inicia a visita guiada.
+        e.preventDefault();
+        e.stopPropagation();
+        enterExperience("tour");
+      }
       if (e.key === " " || e.code === "Space") {
         if (tourC.running && !tourC.paused) tourC.pause();
         else if (tourC.running && tourC.paused) tourC.resume();
@@ -1991,6 +2069,10 @@ function setMoveSpeed(accel) {
 }
 
 async function enterExperience(mode) {
+  // Sempre que entras (explore/tour) voltas à pose de spawn.
+  // Isto evita que uma sessão anterior "vaze" posição/rotação para a próxima.
+  hardResetUserPose();
+
   // aplica opções do welcome
   const amb = !!$("#chkWelcomeAmbient")?.checked;
   const tts = !!$("#chkWelcomeTTS")?.checked;
@@ -2052,7 +2134,32 @@ function showHelp() {
   alert(msg);
 }
 
-// init depois do DOM
-window.addEventListener("DOMContentLoaded", () => {
+function initApp() {
   setupUI();
-});
+
+  // Captura a pose inicial (spawn) o mais cedo possível.
+  // Importante: isto NÃO pode depender só de DOMContentLoaded (pode já ter disparado).
+  captureSpawnPoseOnce();
+  requestAnimationFrame(() => captureSpawnPoseOnce());
+
+  // Depois do scene "loaded" (A-Frame), re-tenta só para garantir.
+  try {
+    const scene = AFRAME?.scenes?.[0];
+    if (scene) {
+      if (scene.hasLoaded) captureSpawnPoseOnce();
+      else
+        scene.addEventListener("loaded", () => captureSpawnPoseOnce(), {
+          once: true,
+        });
+    }
+  } catch {
+    // noop
+  }
+}
+
+// init robusto
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
