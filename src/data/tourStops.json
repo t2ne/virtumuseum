@@ -162,7 +162,7 @@
   },
   {
      "pos": "-14.20 0.00 7.5",
-    "rot": "9.05 0.69 0",
+    "rot": "9.63 179.75 0",
     "moveDur": 1400,
     "lookDur": 600,
     "wait": 900,
@@ -170,7 +170,7 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-14.93 0.00 -20.94",
+     "pos": "-11.2 0.00 7.5",
     "rot": "9.63 179.75 0",
     "moveDur": 1400,
     "lookDur": 600,
@@ -179,7 +179,7 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-18.35 0.00 -20.94",
+     "pos": "-9.0 0.00 7.5",
     "rot": "9.63 179.75 0",
     "moveDur": 1400,
     "lookDur": 600,
@@ -188,7 +188,7 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-20.80 0.00 -20.94",
+     "pos": "-6.30 0.00 7.5",
     "rot": "9.63 179.75 0",
     "moveDur": 1400,
     "lookDur": 600,
@@ -197,8 +197,8 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-23.90 0.00 -20.94",
-    "rot": "9.63 179.75 0",
+     "pos": "-2.80 0.00 7.5",
+    "rot": "4.63 179.75 0",
     "moveDur": 1400,
     "lookDur": 600,
     "wait": 900,
@@ -206,8 +206,8 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-28.92 0.00 -20.94",
-    "rot": "22.92 172.99 0",
+     "pos": "-2.80 0.00 7.5",
+    "rot": "17.63 179.75 0",
     "moveDur": 1400,
     "lookDur": 600,
     "wait": 900,
@@ -215,17 +215,16 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-28.92 0.00 -20.94",
-    "rot": "-8.25 171.84 0",
-    "moveDur": 1400,
+     "pos": "0.20 0.00 7.5",
+    "rot": "17.63 179.75 0",
     "lookDur": 600,
     "wait": 900,
     "title": "Quadro 24",
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-30.84 0.00 -20.94",
-    "rot": "-5.50 -178.42 0",
+     "pos": "-1.20 0.00 7.5",
+    "rot": "4.63 179.75 0",
     "moveDur": 1400,
     "lookDur": 600,
     "wait": 900,
@@ -233,8 +232,8 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-30.84 0.00 -20.94",
-    "rot": "26.70 179.98 0",
+     "pos": "2.70 0.00 7.5",
+    "rot": "9.63 179.75 0",
     "moveDur": 1400,
     "lookDur": 600,
     "wait": 900,
@@ -242,8 +241,8 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-31.37 0.00 -21.90",
-    "rot": "5.27 1.95 0",
+     "pos": "5.30 0.00 7.5",
+    "rot": "17.63 179.75 0",
     "moveDur": 1400,
     "lookDur": 600,
     "wait": 900,
@@ -251,8 +250,8 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-   "pos": "-15.90 0.00 7.2",
-    "rot": "12.03 81.15 0",
+     "pos": "8.50 0.00 7.5",
+    "rot": "9.63 179.75 0",
     "moveDur": 1400,
     "lookDur": 600,
     "wait": 900,
@@ -260,8 +259,8 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-         "pos": "-14.20 0.00 7.5",
-    "rot": "9.05 0.69 0",
+     "pos": "6.8 0.00 3.8",
+    "rot": "6.19 -1.03 0.00",
 
     "moveDur": 1400,
     "lookDur": 600,
@@ -270,8 +269,8 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-40.12 0.00 -30.01",
-    "rot": "12.26 -176.70 0",
+    "pos": "-2.8 0.00 3.8",
+    "rot": "6.19 -1.03 0.00",
     "moveDur": 1400,
     "lookDur": 600,
     "wait": 900,
@@ -279,8 +278,8 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-40.34 0.00 -31.82",
-    "rot": "15.01 -3.21 0",
+       "pos": "-13. 0.00 3.8",
+    "rot": "6.19 -1.03 0.00",
     "moveDur": 1400,
     "lookDur": 600,
     "wait": 900,
@@ -288,8 +287,8 @@
     "desc": "Descrição do quadro (edita aqui)."
   },
   {
-    "pos": "-0.32 0.00 -10.56",
-    "rot": "-5.73 82.62 0",
+    "pos": "-0.02 0.00 -0.15",
+    "rot": "6.19 -1.03 0.00",
     "moveDur": 1600,
     "lookDur": 500,
     "wait": 1200,
