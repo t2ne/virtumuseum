@@ -345,51 +345,55 @@ function resetWASDVelocity() {
   v.z = 0;
 }
 
-// Spawn pose (capturada no arranque, antes do utilizador se mover).
-// Isto é o "spawn" original do jogo e deve ser o mesmo sempre que re-entras.
-const FALLBACK_START_RIG_POS = "0 0 4";
-const FALLBACK_START_RIG_ROT = "0 0 0";
-const FALLBACK_START_CAM_ROT = "0 0 0";
+// Spawn pose do jogo: lida uma vez a partir do HTML (e fica fixa).
+// Isto evita bugs em que o "spawn" é acidentalmente capturado depois do user se mover.
+const FALLBACK_SPAWN_RIG_POS = "0 0 4";
+const FALLBACK_SPAWN_RIG_ROT = "0 0 0";
+const FALLBACK_SPAWN_CAM_ROT = "0 0 0";
 
-let spawnPoseCaptured = false;
-let SPAWN_RIG_POS = FALLBACK_START_RIG_POS;
-let SPAWN_RIG_ROT = FALLBACK_START_RIG_ROT;
-let SPAWN_CAM_ROT = FALLBACK_START_CAM_ROT;
+let SPAWN_RIG_POS = FALLBACK_SPAWN_RIG_POS;
+let SPAWN_RIG_ROT = FALLBACK_SPAWN_RIG_ROT;
+let SPAWN_CAM_ROT = FALLBACK_SPAWN_CAM_ROT;
+let spawnInitialized = false;
 
-function captureSpawnPoseOnce() {
-  if (spawnPoseCaptured) return;
+function vec3AttrToString(v) {
+  if (!v) return null;
+  if (typeof v === "string") {
+    const parsed = parseVec3String(v);
+    return parsed ? vec3ToString(parsed) : v.trim();
+  }
+  if (
+    typeof v === "object" &&
+    [v.x, v.y, v.z].every((n) => Number.isFinite(Number(n)))
+  ) {
+    return `${Number(v.x)} ${Number(v.y)} ${Number(v.z)}`;
+  }
+  return null;
+}
+
+function initSpawnPoseOnce() {
+  if (spawnInitialized) return;
   const rig = $("#rig");
   const cam = $("#cam");
-
-  // Se ainda não existe, voltamos a tentar mais tarde.
   if (!rig || !cam) return;
 
-  try {
-    const rp = rig.getAttribute("position");
-    if (rp && [rp.x, rp.y, rp.z].every((n) => Number.isFinite(n))) {
-      SPAWN_RIG_POS = `${rp.x} ${rp.y} ${rp.z}`;
-    }
-  } catch {}
+  const rp = vec3AttrToString(rig.getAttribute("position"));
+  const rr = vec3AttrToString(rig.getAttribute("rotation"));
+  const cr = vec3AttrToString(cam.getAttribute("rotation"));
 
-  try {
-    const rr = rig.getAttribute("rotation");
-    if (rr && [rr.x, rr.y, rr.z].every((n) => Number.isFinite(n))) {
-      SPAWN_RIG_ROT = `${rr.x} ${rr.y} ${rr.z}`;
-    }
-  } catch {}
+  if (rp) SPAWN_RIG_POS = rp;
+  if (rr) SPAWN_RIG_ROT = rr;
+  if (cr) SPAWN_CAM_ROT = cr;
 
-  try {
-    const cr = cam.getAttribute("rotation");
-    if (cr && [cr.x, cr.y, cr.z].every((n) => Number.isFinite(n))) {
-      SPAWN_CAM_ROT = `${cr.x} ${cr.y} ${cr.z}`;
-    }
-  } catch {}
-
-  spawnPoseCaptured = true;
+  spawnInitialized = true;
+  dlog("spawn initialized", { SPAWN_RIG_POS, SPAWN_RIG_ROT, SPAWN_CAM_ROT });
 }
 
 function hardResetUserPose() {
+  initSpawnPoseOnce();
+
   const rig = $("#rig");
+  const before = rig?.getAttribute?.("position");
   if (rig) {
     rig.removeAttribute("animation__pos");
     rig.removeAttribute("animation__rot");
@@ -428,6 +432,13 @@ function hardResetUserPose() {
 
   movementKeysDown.clear();
   resetWASDVelocity();
+
+  // debug only
+  dlog("hardResetUserPose", {
+    from: vec3AttrToString(before),
+    to: SPAWN_RIG_POS,
+    rigObj3D: rig ? vec3ToString(rig.object3D.position) : null,
+  });
 }
 
 // ---------- Áudio (WebAudio) ----------
@@ -1366,6 +1377,13 @@ function backToWelcome() {
     tour?.stop?.();
   } catch {}
 
+  // trava movimento imediatamente (evita um tick de WASD aplicar posição antiga)
+  const rig = $("#rig");
+  try {
+    rig?.setAttribute?.("wasd-controls", "enabled", false);
+  } catch {}
+  resetWASDVelocity();
+
   // reset total do utilizador para a posição inicial
   hardResetUserPose();
   // Alguns componentes (ex: controls) podem aplicar o estado no frame seguinte.
@@ -2137,24 +2155,8 @@ function showHelp() {
 function initApp() {
   setupUI();
 
-  // Captura a pose inicial (spawn) o mais cedo possível.
-  // Importante: isto NÃO pode depender só de DOMContentLoaded (pode já ter disparado).
-  captureSpawnPoseOnce();
-  requestAnimationFrame(() => captureSpawnPoseOnce());
-
-  // Depois do scene "loaded" (A-Frame), re-tenta só para garantir.
-  try {
-    const scene = AFRAME?.scenes?.[0];
-    if (scene) {
-      if (scene.hasLoaded) captureSpawnPoseOnce();
-      else
-        scene.addEventListener("loaded", () => captureSpawnPoseOnce(), {
-          once: true,
-        });
-    }
-  } catch {
-    // noop
-  }
+  // garante que o spawn fica inicializado logo no arranque
+  initSpawnPoseOnce();
 }
 
 // init robusto
