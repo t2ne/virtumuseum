@@ -839,11 +839,11 @@ function ensureVisualWalls(bounds) {
   const ensure = (id) => {
     let el = document.getElementById(id);
     if (el) return el;
-    el = document.createElement("a-box");
-    el.setAttribute("id", id);
+/*     el = document.createElement("a-box");
+ */    el.setAttribute("id", id);
     el.setAttribute(
       "material",
-      "color: #7c5cff; opacity: 0.18; transparent: true; side: double"
+      "color: rgb(255, 255, 255); opacity: 0.18; transparent: true; side: double"
     );
     el.setAttribute("shadow", "cast: false; receive: false");
     scene.appendChild(el);
