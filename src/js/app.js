@@ -44,12 +44,212 @@ let suppressTeleportUntilMs = 0;
 
 let experienceMode = "welcome"; // "welcome" | "explore" | "tour"
 
+function isTouchDevice() {
+  try {
+    if (navigator.maxTouchPoints > 0) return true;
+    if (window.matchMedia?.("(pointer: coarse)")?.matches) return true;
+    return "ontouchstart" in window;
+  } catch {
+    return false;
+  }
+}
+
 function syncBodyModeClasses() {
   try {
     document.body.classList.toggle("is-tour", experienceMode === "tour");
+    document.body.classList.toggle("is-explore", experienceMode === "explore");
+    document.body.classList.toggle("is-welcome", experienceMode === "welcome");
+    document.body.classList.toggle("is-touch", isTouchDevice());
+    syncMobileJoystickVisibility();
   } catch {
     // noop
   }
+}
+
+const joystickState = {
+  active: false,
+  pointerId: null,
+  x: 0,
+  y: 0,
+  radiusPx: 0,
+  centerX: 0,
+  centerY: 0,
+};
+
+function setJoystickVector(nx, ny) {
+  joystickState.x = clamp(nx, -1, 1);
+  joystickState.y = clamp(ny, -1, 1);
+}
+
+function resetJoystick() {
+  joystickState.active = false;
+  joystickState.pointerId = null;
+  setJoystickVector(0, 0);
+  const stick = $("#mobileJoystickStick");
+  if (stick) stick.style.transform = "translate(-50%, -50%)";
+}
+
+function syncMobileJoystickVisibility() {
+  const el = $("#mobileJoystick");
+  if (!el) return;
+  const menuOpen = $("#menuPanel")?.classList.contains("is-open");
+  const welcomeVisible = !$("#welcome")?.classList.contains("is-hidden");
+  const tourC = $("#tour")?.components?.["tour-guide"];
+  const inTour = experienceMode === "tour" || !!tourC?.running;
+
+  const shouldShow =
+    isTouchDevice() &&
+    experienceMode === "explore" &&
+    !welcomeVisible &&
+    !menuOpen &&
+    !inTour;
+
+  el.classList.toggle("is-hidden", !shouldShow);
+  el.setAttribute("aria-hidden", String(!shouldShow));
+}
+
+function moveRigFromJoystick(dtMs) {
+  if (!joystickState.active) return;
+  if (Math.abs(joystickState.x) < 0.02 && Math.abs(joystickState.y) < 0.02)
+    return;
+
+  const rig = $("#rig");
+  const cam = $("#cam");
+  if (!rig || !cam) return;
+
+  // segurança: não mover fora de exploração
+  const menuOpen = $("#menuPanel")?.classList.contains("is-open");
+  const welcomeVisible = !$("#welcome")?.classList.contains("is-hidden");
+  const tourC = $("#tour")?.components?.["tour-guide"];
+  const inTour = experienceMode === "tour" || !!tourC?.running;
+  if (experienceMode !== "explore" || welcomeVisible || menuOpen || inTour)
+    return;
+
+  const uiMove = clamp(
+    Number(localStorage.getItem("virtumuseum.moveSpeed") || "2") || 2,
+    1,
+    6
+  );
+  const speed = uiMove * 0.55; // unidades/seg (ajustado ao scale do museu)
+  const dt = Math.max(0, Number(dtMs) || 0) / 1000;
+
+  // direções a partir do yaw atual da câmara
+  const THREE = window.THREE;
+  if (!THREE) return;
+
+  const forward = new THREE.Vector3();
+  cam.object3D.getWorldDirection(forward);
+  forward.y = 0;
+  if (forward.lengthSq() < 1e-6) return;
+  forward.normalize();
+
+  const up = new THREE.Vector3(0, 1, 0);
+  const right = new THREE.Vector3().crossVectors(forward, up).normalize();
+
+  const raw = new THREE.Vector3();
+  const f = -joystickState.y; // y<0 (para cima) => avançar
+  raw.addScaledVector(forward, f);
+  raw.addScaledVector(right, joystickState.x);
+
+  const mag = raw.length();
+  if (mag > 1) raw.multiplyScalar(1 / mag);
+  raw.multiplyScalar(speed * dt);
+
+  const p = rig.getAttribute("position");
+  const next = {
+    x: (p?.x || 0) + raw.x,
+    y: p?.y || 0,
+    z: (p?.z || 0) + raw.z,
+  };
+
+  const bounds = getBoundsForRig(rig);
+  const clamped = clampPosToBounds(next, bounds);
+  rig.setAttribute("position", vec3ToString(clamped));
+}
+
+function initMobileJoystick() {
+  const wrap = $("#mobileJoystick");
+  const base = $("#mobileJoystickBase");
+  const stick = $("#mobileJoystickStick");
+  if (!wrap || !base || !stick) return;
+
+  // loop de movimento
+  let last = performance.now();
+  const frame = (now) => {
+    const dt = now - last;
+    last = now;
+    moveRigFromJoystick(dt);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+
+  const refreshCenter = () => {
+    const r = base.getBoundingClientRect();
+    joystickState.radiusPx = Math.max(1, Math.min(r.width, r.height) * 0.42);
+    joystickState.centerX = r.left + r.width / 2;
+    joystickState.centerY = r.top + r.height / 2;
+  };
+
+  const updateStick = (clientX, clientY) => {
+    const dx = clientX - joystickState.centerX;
+    const dy = clientY - joystickState.centerY;
+
+    const maxR = joystickState.radiusPx;
+    const d = Math.hypot(dx, dy) || 0;
+    const k = d > maxR ? maxR / d : 1;
+    const clampedX = dx * k;
+    const clampedY = dy * k;
+
+    setJoystickVector(clampedX / maxR, clampedY / maxR);
+
+    stick.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`;
+  };
+
+  const onDown = (e) => {
+    if (!isTouchDevice()) return;
+    if (experienceMode !== "explore") return;
+    if (wrap.classList.contains("is-hidden")) return;
+
+    e.preventDefault?.();
+    refreshCenter();
+    joystickState.active = true;
+    joystickState.pointerId = e.pointerId ?? null;
+    try {
+      base.setPointerCapture?.(e.pointerId);
+    } catch {}
+    updateStick(e.clientX, e.clientY);
+  };
+
+  const onMove = (e) => {
+    if (!joystickState.active) return;
+    if (
+      joystickState.pointerId != null &&
+      e.pointerId !== joystickState.pointerId
+    )
+      return;
+    e.preventDefault?.();
+    updateStick(e.clientX, e.clientY);
+  };
+
+  const onUp = (e) => {
+    if (
+      joystickState.pointerId != null &&
+      e.pointerId !== joystickState.pointerId
+    )
+      return;
+    resetJoystick();
+  };
+
+  base.addEventListener("pointerdown", onDown, { passive: false });
+  window.addEventListener("pointermove", onMove, { passive: false });
+  window.addEventListener("pointerup", onUp, { passive: true });
+  window.addEventListener("pointercancel", onUp, { passive: true });
+
+  // quando muda de orientação/tamanho
+  window.addEventListener("resize", () => {
+    resetJoystick();
+    syncBodyModeClasses();
+  });
 }
 
 const AMBIENT_URL = "src/assets/audio/jazz.mp3";
@@ -1069,7 +1269,7 @@ AFRAME.registerComponent("tour-guide", {
       if (r) rotStr = `0 ${r.y} 0`;
     } */
 
-      if (stop.target) {
+    if (stop.target) {
       const targetEl = document.querySelector(stop.target);
       if (targetEl) rotStr = this._yawToTarget(rig, targetEl);
     } else if (stop.rot) {
@@ -1328,6 +1528,8 @@ function syncMovementLock() {
   if (mustLock && wc?.velocity) {
     wc.velocity.set(0, 0, 0);
   }
+
+  syncMobileJoystickVisibility();
 }
 
 function setMenuOpen(open) {
@@ -1351,6 +1553,9 @@ function setMenuOpen(open) {
 
   panel.classList.toggle("is-open", open);
   panel.setAttribute("aria-hidden", String(!open));
+  try {
+    document.body.classList.toggle("is-menu-open", !!open);
+  } catch {}
   syncMovementLock();
 }
 
@@ -1825,33 +2030,39 @@ function setupUI() {
     else if (t.includes("parar") || t.includes("sair") || t.includes("stop"))
       tourC.stop();
     else if (t.includes("proxima") || t.includes("seguinte")) tourC.next();
-        else if (t.includes("anterior") || t.includes("antes")) tourC.prev();
-  // Comandos para mostrar ou ocultar imagem do quadro
-  else if (t.includes("imagem on") || t.includes("mostrar imagem") || t.includes("on") || t.includes("imagem ligar")) {
-    setInfoCardImageHidden(false);
-    showToast("Imagens ativadas.");
-  }
-  else if (t.includes("imagem off") || t.includes("ocultar imagem")  || t.includes("off")|| t.includes("imagem desligar")) {
-    setInfoCardImageHidden(true);
-    showToast("Imagens ocultadas.");
-  }
-
-   else if (
-    t.includes("ocultar painel") ||
-    t.includes("ocultar info") || t.includes("ocultar") ||
-    t.includes("fechar painel")
-  ) {
-    setInfoCardCollapsed(true);
-   }
-  else if (
-    t.includes("mostrar painel") ||
-    t.includes("mostrar info") || t.includes("mostrar") ||
-    t.includes("abrir painel")
-  ) {
-    setInfoCardCollapsed(false);
-   }
-
-    else if (t.includes("menu")) toggleMenu();
+    else if (t.includes("anterior") || t.includes("antes")) tourC.prev();
+    // Comandos para mostrar ou ocultar imagem do quadro
+    else if (
+      t.includes("imagem on") ||
+      t.includes("mostrar imagem") ||
+      t.includes("on") ||
+      t.includes("imagem ligar")
+    ) {
+      setInfoCardImageHidden(false);
+      showToast("Imagens ativadas.");
+    } else if (
+      t.includes("imagem off") ||
+      t.includes("ocultar imagem") ||
+      t.includes("off") ||
+      t.includes("imagem desligar")
+    ) {
+      setInfoCardImageHidden(true);
+      showToast("Imagens ocultadas.");
+    } else if (
+      t.includes("ocultar painel") ||
+      t.includes("ocultar info") ||
+      t.includes("ocultar") ||
+      t.includes("fechar painel")
+    ) {
+      setInfoCardCollapsed(true);
+    } else if (
+      t.includes("mostrar painel") ||
+      t.includes("mostrar info") ||
+      t.includes("mostrar") ||
+      t.includes("abrir painel")
+    ) {
+      setInfoCardCollapsed(false);
+    } else if (t.includes("menu")) toggleMenu();
     else if (t.includes("ajuda")) showHelp();
     else if (t.includes("lanterna")) toggleFlashlight();
     else if (t.includes("foto") || t.includes("captura")) takePhoto();
@@ -1874,8 +2085,11 @@ function setupUI() {
         const tourC = $("#tour")?.components?.["tour-guide"];
         if (!tourC) return;
         localStorage.setItem("virtumuseum.lastStopIdx", String(i));
-        if (experienceMode === "tour") tourC.teleportTo?.(i);
-        else tourC.jumpTo?.(i);
+        if (experienceMode !== "tour") {
+          showToast("Teleports disponíveis apenas na visita guiada.");
+          return;
+        }
+        tourC.teleportTo?.(i);
       });
       list.appendChild(b);
     });
@@ -2190,8 +2404,14 @@ function showHelp() {
 function initApp() {
   setupUI();
 
+  // joystick overlay (só em touch/mobile)
+  initMobileJoystick();
+
   // garante que o spawn fica inicializado logo no arranque
   initSpawnPoseOnce();
+
+  // inicia classes do body
+  syncBodyModeClasses();
 }
 
 // init robusto

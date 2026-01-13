@@ -9,6 +9,12 @@
   --accent2: #28d7a1;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body {
   height: 100%;
@@ -32,7 +38,9 @@ body {
 
 .ui {
   position: fixed;
-  inset: 12px 12px auto 12px;
+  inset: calc(12px + env(safe-area-inset-top))
+    calc(12px + env(safe-area-inset-right)) auto
+    calc(12px + env(safe-area-inset-left));
   z-index: 10;
   pointer-events: none;
 }
@@ -85,7 +93,7 @@ button:active {
 .tourNav {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 14;
   display: flex;
@@ -201,15 +209,48 @@ input:not([type]) {
   padding: 0;
 }
 
+/* Teleports: só em visita guiada */
+.ui__section--stops {
+  display: none;
+}
+body.is-tour .ui__section--stops {
+  display: block;
+}
+
 @media (max-width: 520px) {
   .ui {
-    inset: 10px 10px auto 10px;
+    inset: calc(10px + env(safe-area-inset-top))
+      calc(10px + env(safe-area-inset-right)) auto
+      calc(10px + env(safe-area-inset-left));
   }
   button {
     padding: 12px 12px;
   }
   input[type="range"] {
-    width: 150px;
+    width: 100%;
+  }
+
+  .ui__row {
+    flex-wrap: wrap;
+  }
+  .ui__row--split {
+    align-items: flex-start;
+  }
+
+  .ui__panel {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 88px);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ui__bar {
+    gap: 6px;
+  }
+
+  .ui__tourBtn {
+    width: 52px;
+    padding: 12px 0;
+    font-size: 20px;
   }
 }
 
@@ -263,6 +304,22 @@ input:not([type]) {
   margin-top: 12px;
   color: rgba(255, 255, 255, 0.72);
   font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  .welcome {
+    padding: 12px;
+  }
+  .welcome__card {
+    padding: 14px 12px;
+  }
+  .welcome__title {
+    font-size: 20px;
+  }
+  .welcome__buttons button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
 }
 
 /* Info Card */
@@ -342,6 +399,17 @@ body.is-tour .infoCard.is-collapsed {
   display: none !important;
 }
 
+@media (max-width: 520px) {
+  .infoCard {
+    left: 50%;
+    bottom: 12px;
+    width: calc(100vw - 20px);
+    max-height: 55vh;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 /* HUD minimal */
 .ui.is-minimal .ui__panel:not(.is-open) {
   display: none !important;
@@ -366,4 +434,68 @@ body.is-tour .infoCard.is-collapsed {
 }
 .ui.is-hud-off .tourNav {
   display: none !important;
+}
+
+/* Joystick (mobile) */
+.joystick {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 13;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.joystick__base {
+  width: 120px;
+  height: 120px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(10, 10, 14, 0.45);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow);
+  position: relative;
+}
+
+.joystick__stick {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(20, 20, 28, 0.85);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Só em ecrãs touch + apenas em exploração */
+body:not(.is-touch) .joystick {
+  display: none !important;
+}
+body.is-tour .joystick,
+body.is-welcome .joystick,
+body.is-menu-open .joystick {
+  display: none !important;
+}
+body.is-explore.is-touch .joystick {
+  display: block;
+}
+
+@media (max-width: 520px) {
+  .joystick {
+    right: calc(12px + env(safe-area-inset-right));
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  .joystick__base {
+    width: 110px;
+    height: 110px;
+  }
+  .joystick__stick {
+    width: 50px;
+    height: 50px;
+  }
 }

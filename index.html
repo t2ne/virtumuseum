@@ -34,7 +34,7 @@
             <input type="checkbox" id="chkWelcomeAmbient" />
             <span>Música ambiente</span>
           </label>
-        <!--   <label class="ui__row">
+          <!--   <label class="ui__row">
             <input type="checkbox" id="chkWelcomeTTS" />
             <span>Narração (TTS)</span>
           </label> -->
@@ -166,7 +166,7 @@
           </div>
         </div>
  -->
-        <div class="ui__section">
+        <div class="ui__section ui__section--stops" id="stopsSection">
           <div class="ui__sectionTitle">Teleports (paragens)</div>
           <div id="stopsList" class="ui__list"></div>
         </div>
@@ -233,6 +233,13 @@
         >
           →
         </button>
+      </div>
+    </div>
+
+    <!-- Joystick (mobile) — aparece apenas em exploração livre -->
+    <div class="joystick is-hidden" id="mobileJoystick" aria-hidden="true">
+      <div class="joystick__base" id="mobileJoystickBase">
+        <div class="joystick__stick" id="mobileJoystickStick"></div>
       </div>
     </div>
 
