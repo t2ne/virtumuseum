@@ -118,9 +118,8 @@ function getMoveSpeedUi() {
 
 function getMoveSpeedUnitsPerSec() {
   // Mapeamento linear (igual para teclado e joystick).
-  // Range anterior (1.2..7.2 u/s) estava demasiado rápido para o scale do museu.
-  // Novo range: ~0.22..1.32 u/s
-  return getMoveSpeedUi() * 0.05;
+  // Range: ~1.54..9.24 u/s (ui 1..6) — ~7x mais rápido.
+  return getMoveSpeedUi() * 1.54;
 }
 
 function getKeyboardMoveVector() {
@@ -187,11 +186,15 @@ function applyManualMove(dtMs, x, y) {
   if (mag > 1) delta.multiplyScalar(1 / mag);
   delta.multiplyScalar(speed * dt);
 
-  const p = rig.getAttribute("position");
+  const pObj = rig.object3D?.position;
+  const pAttr = rig.getAttribute("position");
+  const px = Number.isFinite(Number(pObj?.x)) ? Number(pObj.x) : pAttr?.x || 0;
+  const py = Number.isFinite(Number(pObj?.y)) ? Number(pObj.y) : pAttr?.y || 0;
+  const pz = Number.isFinite(Number(pObj?.z)) ? Number(pObj.z) : pAttr?.z || 0;
   const next = {
-    x: (p?.x || 0) + delta.x,
-    y: p?.y || 0,
-    z: (p?.z || 0) + delta.z,
+    x: px + delta.x,
+    y: py,
+    z: pz + delta.z,
   };
 
   const bounds = getBoundsForRig(rig);
@@ -201,6 +204,17 @@ function applyManualMove(dtMs, x, y) {
     Math.abs(clamped.z - next.z) > 1e-4
   ) {
     notifyWallHit();
+    debugWalls("manualMove_clamped", rig, {
+      nextPos: next,
+      clampedPos: clamped,
+    });
+  } else {
+    // ainda assim, log se estiver muito perto de uma parede (para diagnóstico)
+    debugWalls("manualMove", rig, { nextPos: next, clampedPos: clamped });
+  }
+  // aplica no object3D para ganhar a corrida contra componentes que mexem diretamente no three.js
+  if (rig.object3D?.position) {
+    rig.object3D.position.set(clamped.x, clamped.y, clamped.z);
   }
   rig.setAttribute("position", vec3ToString(clamped));
 }
@@ -237,6 +251,8 @@ function initMobileJoystick() {
   const base = $("#mobileJoystickBase");
   const stick = $("#mobileJoystickStick");
   if (!wrap || !base || !stick) return;
+
+  const supportsPointerEvents = "PointerEvent" in window;
 
   const refreshCenter = () => {
     const r = base.getBoundingClientRect();
@@ -300,6 +316,61 @@ function initMobileJoystick() {
   window.addEventListener("pointermove", onMove, { passive: false });
   window.addEventListener("pointerup", onUp, { passive: true });
   window.addEventListener("pointercancel", onUp, { passive: true });
+
+  // Fallback para browsers sem Pointer Events (ou com suporte incompleto).
+  // Ex: alguns iOS/Safari antigos.
+  if (!supportsPointerEvents) {
+    const getTouch = (ev) => {
+      const t = ev?.changedTouches?.[0] || ev?.touches?.[0];
+      if (!t) return null;
+      return { id: t.identifier, x: t.clientX, y: t.clientY };
+    };
+
+    base.addEventListener(
+      "touchstart",
+      (ev) => {
+        const t = getTouch(ev);
+        if (!t) return;
+        if (!isTouchDevice()) return;
+        if (experienceMode !== "explore") return;
+        if (wrap.classList.contains("is-hidden")) return;
+
+        ev.preventDefault?.();
+        refreshCenter();
+        joystickState.active = true;
+        joystickState.pointerId = t.id;
+        updateStick(t.x, t.y);
+      },
+      { passive: false }
+    );
+
+    window.addEventListener(
+      "touchmove",
+      (ev) => {
+        if (!joystickState.active) return;
+        const t = getTouch(ev);
+        if (!t) return;
+        if (joystickState.pointerId != null && t.id !== joystickState.pointerId)
+          return;
+        ev.preventDefault?.();
+        updateStick(t.x, t.y);
+      },
+      { passive: false }
+    );
+
+    const endTouch = (ev) => {
+      const t = getTouch(ev);
+      if (!t) {
+        resetJoystick();
+        return;
+      }
+      if (joystickState.pointerId != null && t.id !== joystickState.pointerId)
+        return;
+      resetJoystick();
+    };
+    window.addEventListener("touchend", endTouch, { passive: true });
+    window.addEventListener("touchcancel", endTouch, { passive: true });
+  }
 
   // quando muda de orientação/tamanho
   window.addEventListener("resize", () => {
@@ -556,6 +627,14 @@ function vec3ToString(p) {
 function getBoundsForRig(rigEl) {
   // Prefer bounds applied by our 4-walls system (doesn't depend on component init timing).
   if (activeGalleryBounds) return activeGalleryBounds;
+  // Se por alguma razão só existirem as paredes visuais (centros), deriva bounds de colisão.
+  if (activeGalleryWallCenters) {
+    try {
+      return collisionBoundsFromWallCenters(activeGalleryWallCenters);
+    } catch {
+      // ignore
+    }
+  }
   const bk = rigEl?.components?.["bounds-keeper"];
   const d = bk?.data;
   if (!d) return { minX: -60, maxX: 60, minZ: -80, maxZ: 80, y: 0 };
@@ -578,6 +657,11 @@ function clampPosToBounds(pos, bounds) {
 
 // --- 4 WALLS (simple bounds + optional visual boxes) ---
 
+// Espessura das caixas das paredes (visuais)
+const WALL_BOX_THICKNESS = 0.12;
+// “Raio” aproximado do player (para não encostar a câmara dentro da parede)
+const PLAYER_RADIUS = 0.28;
+
 const DEFAULT_GALLERY_BOUNDS = {
   // fallback seguro se os stops não carregarem (ex: abrir via file:// sem fetch)
   // (um pouco mais largo do que o necessário, para evitar ficar "apertado")
@@ -589,6 +673,7 @@ const DEFAULT_GALLERY_BOUNDS = {
 };
 
 let activeGalleryBounds = null;
+let activeGalleryWallCenters = null;
 
 // Ajustes por parede (valores em metros):
 // - positivo = puxa a parede para dentro (mais "perto")
@@ -634,6 +719,90 @@ function notifyWallHit() {
   lastWallHitAt = now;
   showToast("Parede.");
 }
+
+function isDebugWallsEnabled() {
+  try {
+    if (window.__DEBUG_WALLS === true) return true;
+    return localStorage.getItem("virtumuseum.debugWalls") === "1";
+  } catch {
+    return false;
+  }
+}
+
+let lastWallDebugAt = 0;
+function debugWalls(reason, rigEl, { nextPos = null, clampedPos = null } = {}) {
+  if (!isDebugWallsEnabled()) return;
+  const now = performance.now();
+  if (now - lastWallDebugAt < 250) return;
+  lastWallDebugAt = now;
+
+  const rig = rigEl || $("#rig");
+  if (!rig) return;
+
+  const bounds = getBoundsForRig(rig);
+  const pAttr = rig.getAttribute("position");
+  const pObj = rig.object3D?.position;
+  const pos = {
+    x: Number.isFinite(Number(pObj?.x)) ? Number(pObj.x) : Number(pAttr?.x),
+    y: Number.isFinite(Number(pObj?.y)) ? Number(pObj.y) : Number(pAttr?.y),
+    z: Number.isFinite(Number(pObj?.z)) ? Number(pObj.z) : Number(pAttr?.z),
+  };
+  if (![pos.x, pos.y, pos.z].every(Number.isFinite)) return;
+  const inside =
+    pos.x >= bounds.minX &&
+    pos.x <= bounds.maxX &&
+    pos.z >= bounds.minZ &&
+    pos.z <= bounds.maxZ;
+
+  const dist = {
+    west: pos.x - bounds.minX,
+    east: bounds.maxX - pos.x,
+    south: pos.z - bounds.minZ,
+    north: bounds.maxZ - pos.z,
+  };
+
+  const eps = 0.06; // ~6cm
+  const touching = {
+    west: dist.west <= eps,
+    east: dist.east <= eps,
+    south: dist.south <= eps,
+    north: dist.north <= eps,
+  };
+
+  const clamped =
+    !!clampedPos &&
+    (Math.abs(Number(clampedPos.x) - Number(nextPos?.x)) > 1e-4 ||
+      Math.abs(Number(clampedPos.z) - Number(nextPos?.z)) > 1e-4);
+
+  console.log("[walls]", reason, {
+    inside,
+    touching,
+    dist,
+    bounds,
+    pos,
+    posAttr: pAttr,
+    posObj: pObj ? { x: pObj.x, y: pObj.y, z: pObj.z } : null,
+    nextPos,
+    clampedPos,
+    clamped,
+    activeGalleryBounds,
+    activeGalleryWallCenters,
+  });
+}
+
+// toggles em runtime (para testes)
+window.VirtuMuseum = window.VirtuMuseum || {};
+window.VirtuMuseum.setDebugWalls = (on) => {
+  try {
+    const v = on ? "1" : "0";
+    localStorage.setItem("virtumuseum.debugWalls", v);
+    window.__DEBUG_WALLS = !!on;
+    console.log("[walls] debug", on ? "ON" : "OFF");
+  } catch {
+    window.__DEBUG_WALLS = !!on;
+    console.log("[walls] debug", on ? "ON" : "OFF");
+  }
+};
 
 function computeBoundsFromStops(stops, pad = 2.25) {
   if (!Array.isArray(stops) || !stops.length) return null;
@@ -682,7 +851,7 @@ function ensureVisualWalls(bounds) {
   };
 
   const wallH = 3;
-  const thick = 0.12;
+  const thick = WALL_BOX_THICKNESS;
   const cx = (bounds.minX + bounds.maxX) / 2;
   const cz = (bounds.minZ + bounds.maxZ) / 2;
   const w = Math.max(0.1, bounds.maxX - bounds.minX);
@@ -713,6 +882,17 @@ function ensureVisualWalls(bounds) {
   o.setAttribute("position", `${bounds.minX} ${wallH / 2} ${cz}`);
 }
 
+function collisionBoundsFromWallCenters(wallCenters) {
+  const inset = WALL_BOX_THICKNESS / 2 + PLAYER_RADIUS;
+  return {
+    minX: Number(wallCenters.minX) + inset,
+    maxX: Number(wallCenters.maxX) - inset,
+    minZ: Number(wallCenters.minZ) + inset,
+    maxZ: Number(wallCenters.maxZ) - inset,
+    y: Number(wallCenters.y ?? 0),
+  };
+}
+
 function applyFourWalls(bounds, { visual = true } = {}) {
   const rig = $("#rig");
   if (!rig || !bounds) return;
@@ -726,18 +906,24 @@ function applyFourWalls(bounds, { visual = true } = {}) {
   if (![raw.minX, raw.maxX, raw.minZ, raw.maxZ, raw.y].every(Number.isFinite))
     return;
 
-  const b = applyWallTweak(raw);
+  // Estes valores representam o CENTRO das 4 paredes (onde a caixa está posicionada).
+  const wallCenters = applyWallTweak(raw);
+  activeGalleryWallCenters = wallCenters;
 
+  // Bounds de colisão: face interior da parede - raio do player
+  const collision = collisionBoundsFromWallCenters(wallCenters);
   // torna as bounds imediatamente ativas para o clamp (mesmo antes do component init)
-  activeGalleryBounds = b;
+  activeGalleryBounds = collision;
 
   // colisão real: clamp via bounds-keeper
   rig.setAttribute(
     "bounds-keeper",
-    `minX: ${b.minX}; maxX: ${b.maxX}; minZ: ${b.minZ}; maxZ: ${b.maxZ}; y: ${b.y}`
+    `minX: ${collision.minX}; maxX: ${collision.maxX}; minZ: ${collision.minZ}; maxZ: ${collision.maxZ}; y: ${collision.y}`
   );
 
-  if (visual) ensureVisualWalls(b);
+  if (visual) ensureVisualWalls(wallCenters);
+
+  debugWalls("applyFourWalls", rig, { nextPos: null, clampedPos: null });
 }
 
 function setZoomFov(fov) {
@@ -926,9 +1112,13 @@ class AudioEngine {
       const g = this.ctx.createGain();
       g.gain.value = 0.0;
       const now = this.ctx.currentTime;
-      g.gain.cancelScheduledValues(now);
-      g.gain.setValueAtTime(0.0, now);
-      g.gain.linearRampToValueAtTime(0.22, now + 0.8);
+      try {
+        g.gain.cancelScheduledValues(now);
+        g.gain.setValueAtTime(0.0, now);
+        g.gain.linearRampToValueAtTime(0.22, now + 0.8);
+      } catch {
+        g.gain.value = 0.22;
+      }
 
       src.connect(g);
       g.connect(this.master);
@@ -1708,46 +1898,49 @@ AFRAME.registerComponent("bounds-keeper", {
     this.lastSafe = null;
     this.lastWarn = 0;
 
-    const p = this.el.getAttribute("position");
-    if (p) {
-      const b = getBoundsForRig(this.el);
-      const inside =
-        p.x >= b.minX && p.x <= b.maxX && p.z >= b.minZ && p.z <= b.maxZ;
-      if (inside) this.lastSafe = { x: p.x, y: b.y, z: p.z };
-    }
+    const pObj = this.el.object3D?.position;
+    if (!pObj) return;
+    const b = getBoundsForRig(this.el);
+    const inside =
+      pObj.x >= b.minX &&
+      pObj.x <= b.maxX &&
+      pObj.z >= b.minZ &&
+      pObj.z <= b.maxZ;
+    if (inside) this.lastSafe = { x: pObj.x, y: b.y, z: pObj.z };
   },
   tick: function () {
     const el = this.el;
-    const p = el.getAttribute("position");
-    if (!p) return;
+    const pObj = el.object3D?.position;
+    if (!pObj) return;
 
     const b = getBoundsForRig(el);
 
     // força Y (evita drift)
-    if (typeof b.y === "number" && Math.abs(p.y - b.y) > 0.01) {
-      el.setAttribute("position", `${p.x} ${b.y} ${p.z}`);
+    if (typeof b.y === "number" && Math.abs(pObj.y - b.y) > 0.01) {
+      pObj.y = b.y;
     }
 
     const inside =
-      p.x >= b.minX && p.x <= b.maxX && p.z >= b.minZ && p.z <= b.maxZ;
+      pObj.x >= b.minX &&
+      pObj.x <= b.maxX &&
+      pObj.z >= b.minZ &&
+      pObj.z <= b.maxZ;
 
     if (inside) {
-      this.lastSafe = { x: p.x, y: b.y, z: p.z };
+      this.lastSafe = { x: pObj.x, y: b.y, z: pObj.z };
       return;
     }
 
-    // fora de limites -> volta ao último safe
+    debugWalls("boundsKeeper_outside", el, {
+      nextPos: { x: pObj.x, y: pObj.y, z: pObj.z },
+      clampedPos: this.lastSafe,
+    });
+
+    // fora de limites -> clamp ao limite (parece colisão, em vez de "teleport" para trás)
     const now = performance.now();
-    if (this.lastSafe) {
-      el.setAttribute(
-        "position",
-        `${this.lastSafe.x.toFixed(3)} ${this.lastSafe.y.toFixed(
-          3
-        )} ${this.lastSafe.z.toFixed(3)}`
-      );
-    } else {
-      el.setAttribute("position", `0 ${b.y} 3`);
-    }
+    const clamped = clampPosToBounds({ x: pObj.x, y: b.y, z: pObj.z }, b);
+    pObj.set(clamped.x, clamped.y, clamped.z);
+    el.setAttribute("position", vec3ToString(clamped));
 
     if (now - this.lastWarn > 1500) {
       this.lastWarn = now;
