@@ -1393,433 +1393,433 @@ AFRAME.registerComponent("hotspot", {
   },
 });
 
-AFRAME.registerComponent("tour-guide", {
-  schema: {
-    rig: { type: "selector" },
-    panel: { type: "selector" },
-    text: { type: "selector" },
-    narrator: { type: "selector" },
-    stopsUrl: { type: "string", default: "src/data/tourStops.json" },
-    stopsEl: { type: "selector" }, // fallback opcional
-    autoAdvance: { type: "boolean", default: false },
-    speed: { type: "number", default: 1.0 },
-  },
+  AFRAME.registerComponent("tour-guide", {
+    schema: {
+      rig: { type: "selector" },
+      panel: { type: "selector" },
+      text: { type: "selector" },
+      narrator: { type: "selector" },
+      stopsUrl: { type: "string", default: "src/data/tourStops.json" },
+      stopsEl: { type: "selector" }, // fallback opcional
+      autoAdvance: { type: "boolean", default: false },
+      speed: { type: "number", default: 1.0 },
+    },
 
-  init: function () {
-    this.idx = 0;
-    this.running = false;
-    this.paused = false;
-    this.timers = [];
-    this.stops = [];
-    this.reducedMotion = false;
-    this.tts = false;
-    this.stopsLoaded = false;
-    this._stopsReady = this._loadStops();
-    $("#btnStop")?.addEventListener("click", () => this.stop());
-  },
+    init: function () {
+      this.idx = 0;
+      this.running = false;
+      this.paused = false;
+      this.timers = [];
+      this.stops = [];
+      this.reducedMotion = false;
+      this.tts = false;
+      this.stopsLoaded = false;
+      this._stopsReady = this._loadStops();
+      $("#btnStop")?.addEventListener("click", () => this.stop());
+    },
 
-  setOptions: function ({ speed, reducedMotion, tts } = {}) {
-    if (typeof speed === "number") this.data.speed = speed;
-    if (typeof reducedMotion === "boolean") this.reducedMotion = reducedMotion;
-    if (typeof tts === "boolean") this.tts = tts;
-  },
+    setOptions: function ({ speed, reducedMotion, tts } = {}) {
+      if (typeof speed === "number") this.data.speed = speed;
+      if (typeof reducedMotion === "boolean") this.reducedMotion = reducedMotion;
+      if (typeof tts === "boolean") this.tts = tts;
+    },
 
-  _readStopsFromDom: function () {
-    const json = (this.data.stopsEl?.textContent || "").trim();
-    return json ? safeJsonParse(json, []) : [];
-  },
-  _loadStops: async function () {
-    try {
-      const url = this.data.stopsUrl || "src/data/tourStops.json";
-      const r = await fetch(url, { cache: "no-store" });
-      console.log("[tour] fetch", url, "status", r.status);
-      const stops = await r.json();
-      this.stops = Array.isArray(stops) ? stops : [];
-    } catch (err) {
-      console.warn("[tour] falhou carregar stops:", err);
-      this.stops = this._readStopsFromDom();
-    }
-
-    console.log("[tour] stops carregados:", this.stops.length, this.stops[0]);
-
-    // Enriquecimento via paintings.json (título/descrição/imagem), quando disponível.
-    await enrichStopsWithPaintings(this.stops);
-
-    this.stopsLoaded = true;
-
-    window.dispatchEvent(
-      new CustomEvent("tour:stopsLoaded", { detail: { stops: this.stops } })
-    );
-  },
-
-  start: async function () {
-    if (this.running) return;
-    experienceMode = "tour";
-    syncBodyModeClasses();
-    this.running = true;
-    this.paused = false;
-    this.idx = 0;
-    this.data.rig?.setAttribute("wasd-controls", "enabled", false);
-
-    // reset pose para evitar começar "torto" ao mudar de explorar -> tour
-    this.data.rig?.setAttribute("rotation", "0 0 0");
-    $("#cam")?.setAttribute("rotation", "0 0 0");
-    resetWASDVelocity();
-
-    try {
-      await this._stopsReady;
-    } catch {}
-
-    if (!this.stops?.length) {
-      showToast("Visita: não foi possível carregar as paragens.");
-      this.stop();
-      return;
-    }
-
-    const prevRM = this.reducedMotion;
-    this.reducedMotion = true; // teleport instantâneo no 1º stop
-    this._goToStop(this.idx);
-    this.reducedMotion = prevRM;
-  },
-
-  pause: function () {
-    if (!this.running || this.paused) return;
-    this.paused = true;
-    this._clearTimers();
-    this.data.rig?.removeAttribute("animation__pos");
-    this.data.rig?.removeAttribute("animation__rot");
-  },
-
-  resume: function () {
-    if (!this.running || !this.paused) return;
-    this.paused = false;
-    this._goToStop(this.idx);
-  },
-
-  stop: function () {
-    this.running = false;
-    this.paused = false;
-    const leavingTour = experienceMode === "tour";
-    if (leavingTour) experienceMode = "explore";
-    syncBodyModeClasses();
-    this._clearTimers();
-    // Movimento manual (teclado/joystick) — mantém wasd-controls sempre desligado.
-    if (leavingTour)
-      this.data.rig?.setAttribute("wasd-controls", "enabled", false);
-    setTeleportEnabled(false);
-    this.data.panel?.setAttribute("visible", false);
-    this.data.narrator?.removeAttribute("sound");
-    hideInfoCard();
-    updateTourNav(false);
-  },
-
-  next: function () {
-    if (!this.running) return;
-    if (this.idx >= this.stops.length - 1) {
-      showToast("Já estás na última paragem.");
-      updateTourNav(true, this.idx, this.stops.length);
-      return;
-    }
-    this._clearTimers();
-    this.idx = this.idx + 1;
-    this._goToStop(this.idx);
-  },
-
-  prev: function () {
-    if (!this.running) return;
-    if (this.idx <= 0) {
-      showToast("Já estás na primeira paragem.");
-      updateTourNav(true, this.idx, this.stops.length);
-      return;
-    }
-    this._clearTimers();
-    this.idx = Math.max(0, this.idx - 1);
-    this._goToStop(this.idx);
-  },
-
-  teleportTo: function (i) {
-    if (!this.stopsLoaded) {
-      this._stopsReady?.then(() => this.teleportTo(i));
-      return;
-    }
-    if (!this.stops[i]) return;
-    localStorage.setItem("virtumuseum.lastStopIdx", String(i));
-    this._clearTimers();
-    this.idx = i;
-    // força modo reduzido nesta ação (teleport instantâneo)
-    const prev = this.reducedMotion;
-    this.reducedMotion = true;
-    if (!this.running) this.running = true;
-    this.paused = false;
-    this.data.rig?.setAttribute("wasd-controls", "enabled", false);
-    this._goToStop(this.idx);
-    this.reducedMotion = prev;
-  },
-
-  // Teleport simples para exploração (não liga visita, não mostra setas, não bloqueia WASD)
-  jumpTo: function (i) {
-    if (!this.stopsLoaded) {
-      this._stopsReady?.then(() => this.jumpTo(i));
-      return;
-    }
-    const stop = this.stops?.[i];
-    const rig = this.data.rig;
-    if (!stop || !rig) return;
-
-    const bounds = getBoundsForRig(rig);
-    const parsed = parseVec3String(stop.pos || "");
-    if (parsed) {
-      const clamped = clampPosToBounds(parsed, bounds);
-      rig.setAttribute("position", vec3ToString(clamped));
-    }
-
-    // rotação apenas em yaw (evita inclinar a câmara e parecer que o museu mexe)
-    if (stop.target) {
-      const targetEl = document.querySelector(stop.target);
-      if (targetEl) {
-        rig.setAttribute("rotation", this._yawToTarget(rig, targetEl));
+    _readStopsFromDom: function () {
+      const json = (this.data.stopsEl?.textContent || "").trim();
+      return json ? safeJsonParse(json, []) : [];
+    },
+    _loadStops: async function () {
+      try {
+        const url = this.data.stopsUrl || "src/data/tourStops.json";
+        const r = await fetch(url, { cache: "no-store" });
+        console.log("[tour] fetch", url, "status", r.status);
+        const stops = await r.json();
+        this.stops = Array.isArray(stops) ? stops : [];
+      } catch (err) {
+        console.warn("[tour] falhou carregar stops:", err);
+        this.stops = this._readStopsFromDom();
       }
-    } else if (stop.rot) {
-      const r = parseVec3String(stop.rot);
-      if (r) rig.setAttribute("rotation", `0 ${r.y} 0`);
-    }
 
-    rig.removeAttribute("animation__pos");
-    /*     rig.removeAttribute("animation__rot");
-     */ showToast(`Teleport: ${stop.title || "paragem"}`);
-  },
+      console.log("[tour] stops carregados:", this.stops.length, this.stops[0]);
 
-  _clearTimers: function () {
-    this.timers.forEach((t) => clearTimeout(t));
-    this.timers = [];
-  },
+      // Enriquecimento via paintings.json (título/descrição/imagem), quando disponível.
+      await enrichStopsWithPaintings(this.stops);
 
-  _yawToTarget: function (rigEl, targetEl) {
-    const rigPos = new THREE.Vector3();
-    const tgtPos = new THREE.Vector3();
-    rigEl.object3D.getWorldPosition(rigPos);
-    targetEl.object3D.getWorldPosition(tgtPos);
-    const dx = tgtPos.x - rigPos.x;
-    const dz = tgtPos.z - rigPos.z;
-    const yawRad = Math.atan2(dx, dz);
-    const yawDeg = THREE.MathUtils.radToDeg(yawRad);
-    return `0 ${yawDeg} 0`;
-  },
+      this.stopsLoaded = true;
 
-  _pitchToTarget: function (rigEl, targetEl) {
-    // Pitch para olhar para cima/baixo sem inclinar o mundo:
-    // aplica-se depois na câmara (look-controls), não no rig.
-    const camEl = document.querySelector("#cam");
-    const camObj = camEl?.getObject3D?.("camera") || camEl?.object3D;
-    if (!camObj) return 0;
+      window.dispatchEvent(
+        new CustomEvent("tour:stopsLoaded", { detail: { stops: this.stops } })
+      );
+    },
 
-    const camPos = new THREE.Vector3();
-    const tgtPos = new THREE.Vector3();
-    camObj.getWorldPosition(camPos);
-    targetEl.object3D.getWorldPosition(tgtPos);
+    start: async function () {
+      if (this.running) return;
+      experienceMode = "tour";
+      syncBodyModeClasses();
+      this.running = true;
+      this.paused = false;
+      this.idx = 0;
+      this.data.rig?.setAttribute("wasd-controls", "enabled", false);
 
-    const dx = tgtPos.x - camPos.x;
-    const dy = tgtPos.y - camPos.y;
-    const dz = tgtPos.z - camPos.z;
-    const horiz = Math.hypot(dx, dz);
-    if (horiz < 1e-6) return 0;
+      // reset pose para evitar começar "torto" ao mudar de explorar -> tour
+      this.data.rig?.setAttribute("rotation", "0 0 0");
+      $("#cam")?.setAttribute("rotation", "0 0 0");
+      resetWASDVelocity();
 
-    const pitchRad = Math.atan2(dy, horiz);
-    // Em three.js, X positivo olha para baixo, portanto invertimos.
-    return -THREE.MathUtils.radToDeg(pitchRad);
-  },
+      try {
+        await this._stopsReady;
+      } catch {}
 
-  _applyPanel: function (stop) {
-    // Mostra UI HTML (não tapa o ecrã como o painel 3D)
-    setInfoCardImage(stop?.imageUrl || "", stop?.title || "");
-    showInfoCard(
-      stop.title,
-      stop.desc,
-      "Usa ← / → para navegar. (Esc termina a visita)"
-    );
-    if (this.tts) speak(`${stop.title}. ${stop.desc}`);
-  },
+      if (!this.stops?.length) {
+        showToast("Visita: não foi possível carregar as paragens.");
+        this.stop();
+        return;
+      }
 
-  _goToStop: function (i) {
-    if (!this.running || this.paused) return;
-    const stop = this.stops[i];
-    if (!stop) {
-      showToast("Paragem inválida.");
-      updateTourNav(true, this.idx, this.stops.length);
-      return;
-    }
+      const prevRM = this.reducedMotion;
+      this.reducedMotion = true; // teleport instantâneo no 1º stop
+      this._goToStop(this.idx);
+      this.reducedMotion = prevRM;
+    },
 
-    const speed = this.data.speed || 1.0;
-    const moveDur = (stop.moveDur ?? 1500) / speed;
-    const lookDur = (stop.lookDur ?? 600) / speed;
-    const wait = (stop.wait ?? 1200) / speed;
+    pause: function () {
+      if (!this.running || this.paused) return;
+      this.paused = true;
+      this._clearTimers();
+      this.data.rig?.removeAttribute("animation__pos");
+      this.data.rig?.removeAttribute("animation__rot");
+    },
 
-    const rig = this.data.rig;
-    if (!rig) return;
-    const bounds = getBoundsForRig(rig);
+    resume: function () {
+      if (!this.running || !this.paused) return;
+      this.paused = false;
+      this._goToStop(this.idx);
+    },
 
-    // Inter-state: enquanto muda de paragem
-    const destTitle = stop.title
-      ? `A caminho: ${stop.title}`
-      : "A mudar de paragem…";
-    setInfoCardTransition(true, destTitle);
-    $("#btnTourPrev")?.setAttribute("disabled", "true");
-    $("#btnTourNext")?.setAttribute("disabled", "true");
+    stop: function () {
+      this.running = false;
+      this.paused = false;
+      const leavingTour = experienceMode === "tour";
+      if (leavingTour) experienceMode = "explore";
+      syncBodyModeClasses();
+      this._clearTimers();
+      // Movimento manual (teclado/joystick) — mantém wasd-controls sempre desligado.
+      if (leavingTour)
+        this.data.rig?.setAttribute("wasd-controls", "enabled", false);
+      setTeleportEnabled(false);
+      this.data.panel?.setAttribute("visible", false);
+      this.data.narrator?.removeAttribute("sound");
+      hideInfoCard();
+      updateTourNav(false);
+    },
 
-    // -----------------------------
-    // 1) MOVIMENTO / TELEPORT (POS)
-    // -----------------------------
-    if (stop.pos) {
-      const parsed = parseVec3String(stop.pos);
-      if (!parsed) {
-        showToast("Paragem com posição inválida.");
-      } else {
+    next: function () {
+      if (!this.running) return;
+      if (this.idx >= this.stops.length - 1) {
+        showToast("Já estás na última paragem.");
+        updateTourNav(true, this.idx, this.stops.length);
+        return;
+      }
+      this._clearTimers();
+      this.idx = this.idx + 1;
+      this._goToStop(this.idx);
+    },
+
+    prev: function () {
+      if (!this.running) return;
+      if (this.idx <= 0) {
+        showToast("Já estás na primeira paragem.");
+        updateTourNav(true, this.idx, this.stops.length);
+        return;
+      }
+      this._clearTimers();
+      this.idx = Math.max(0, this.idx - 1);
+      this._goToStop(this.idx);
+    },
+
+    teleportTo: function (i) {
+      if (!this.stopsLoaded) {
+        this._stopsReady?.then(() => this.teleportTo(i));
+        return;
+      }
+      if (!this.stops[i]) return;
+      localStorage.setItem("virtumuseum.lastStopIdx", String(i));
+      this._clearTimers();
+      this.idx = i;
+      // força modo reduzido nesta ação (teleport instantâneo)
+      const prev = this.reducedMotion;
+      this.reducedMotion = true;
+      if (!this.running) this.running = true;
+      this.paused = false;
+      this.data.rig?.setAttribute("wasd-controls", "enabled", false);
+      this._goToStop(this.idx);
+      this.reducedMotion = prev;
+    },
+
+    // Teleport simples para exploração (não liga visita, não mostra setas, não bloqueia WASD)
+    jumpTo: function (i) {
+      if (!this.stopsLoaded) {
+        this._stopsReady?.then(() => this.jumpTo(i));
+        return;
+      }
+      const stop = this.stops?.[i];
+      const rig = this.data.rig;
+      if (!stop || !rig) return;
+
+      const bounds = getBoundsForRig(rig);
+      const parsed = parseVec3String(stop.pos || "");
+      if (parsed) {
         const clamped = clampPosToBounds(parsed, bounds);
-        const toPos = vec3ToString(clamped);
+        rig.setAttribute("position", vec3ToString(clamped));
+      }
 
-        if (this.reducedMotion) {
-          rig.setAttribute("position", toPos);
-          rig.removeAttribute("animation__pos");
+      // rotação apenas em yaw (evita inclinar a câmara e parecer que o museu mexe)
+      if (stop.target) {
+        const targetEl = document.querySelector(stop.target);
+        if (targetEl) {
+          rig.setAttribute("rotation", this._yawToTarget(rig, targetEl));
+        }
+      } else if (stop.rot) {
+        const r = parseVec3String(stop.rot);
+        if (r) rig.setAttribute("rotation", `0 ${r.y} 0`);
+      }
+
+      rig.removeAttribute("animation__pos");
+      /*     rig.removeAttribute("animation__rot");
+      */ showToast(`Teleport: ${stop.title || "paragem"}`);
+    },
+
+    _clearTimers: function () {
+      this.timers.forEach((t) => clearTimeout(t));
+      this.timers = [];
+    },
+
+    _yawToTarget: function (rigEl, targetEl) {
+      const rigPos = new THREE.Vector3();
+      const tgtPos = new THREE.Vector3();
+      rigEl.object3D.getWorldPosition(rigPos);
+      targetEl.object3D.getWorldPosition(tgtPos);
+      const dx = tgtPos.x - rigPos.x;
+      const dz = tgtPos.z - rigPos.z;
+      const yawRad = Math.atan2(dx, dz);
+      const yawDeg = THREE.MathUtils.radToDeg(yawRad);
+      return `0 ${yawDeg} 0`;
+    },
+
+    _pitchToTarget: function (rigEl, targetEl) {
+      // Pitch para olhar para cima/baixo sem inclinar o mundo:
+      // aplica-se depois na câmara (look-controls), não no rig.
+      const camEl = document.querySelector("#cam");
+      const camObj = camEl?.getObject3D?.("camera") || camEl?.object3D;
+      if (!camObj) return 0;
+
+      const camPos = new THREE.Vector3();
+      const tgtPos = new THREE.Vector3();
+      camObj.getWorldPosition(camPos);
+      targetEl.object3D.getWorldPosition(tgtPos);
+
+      const dx = tgtPos.x - camPos.x;
+      const dy = tgtPos.y - camPos.y;
+      const dz = tgtPos.z - camPos.z;
+      const horiz = Math.hypot(dx, dz);
+      if (horiz < 1e-6) return 0;
+
+      const pitchRad = Math.atan2(dy, horiz);
+      // Em three.js, X positivo olha para baixo, portanto invertimos.
+      return -THREE.MathUtils.radToDeg(pitchRad);
+    },
+
+    _applyPanel: function (stop) {
+      // Mostra UI HTML (não tapa o ecrã como o painel 3D)
+      setInfoCardImage(stop?.imageUrl || "", stop?.title || "");
+      showInfoCard(
+        stop.title,
+        stop.desc,
+        "Usa ← / → para navegar. (Esc termina a visita)"
+      );
+      if (this.tts) speak(`${stop.title}. ${stop.desc}`);
+    },
+
+    _goToStop: function (i) {
+      if (!this.running || this.paused) return;
+      const stop = this.stops[i];
+      if (!stop) {
+        showToast("Paragem inválida.");
+        updateTourNav(true, this.idx, this.stops.length);
+        return;
+      }
+
+      const speed = this.data.speed || 1.0;
+      const moveDur = (stop.moveDur ?? 1500) / speed;
+      const lookDur = (stop.lookDur ?? 600) / speed;
+      const wait = (stop.wait ?? 1200) / speed;
+
+      const rig = this.data.rig;
+      if (!rig) return;
+      const bounds = getBoundsForRig(rig);
+
+      // Inter-state: enquanto muda de paragem
+      const destTitle = stop.title
+        ? `A caminho: ${stop.title}`
+        : "A mudar de paragem…";
+      setInfoCardTransition(true, destTitle);
+      $("#btnTourPrev")?.setAttribute("disabled", "true");
+      $("#btnTourNext")?.setAttribute("disabled", "true");
+
+      // -----------------------------
+      // 1) MOVIMENTO / TELEPORT (POS)
+      // -----------------------------
+      if (stop.pos) {
+        const parsed = parseVec3String(stop.pos);
+        if (!parsed) {
+          showToast("Paragem com posição inválida.");
         } else {
-          rig.setAttribute("animation__pos", {
-            property: "position",
-            to: toPos,
-            dur: moveDur,
+          const clamped = clampPosToBounds(parsed, bounds);
+          const toPos = vec3ToString(clamped);
+
+          if (this.reducedMotion) {
+            rig.setAttribute("position", toPos);
+            rig.removeAttribute("animation__pos");
+          } else {
+            rig.setAttribute("animation__pos", {
+              property: "position",
+              to: toPos,
+              dur: moveDur,
+              easing: "easeInOutQuad",
+            });
+          }
+        }
+      }
+      // -----------------------------
+      // 2) ROTAÇÃO (yaw no rig; pitch na câmara)
+      // -----------------------------
+      let yawStr = null;
+      let pitchDeg = 0;
+
+      if (stop.target) {
+        const targetEl = document.querySelector(stop.target);
+        if (targetEl) {
+          yawStr = this._yawToTarget(rig, targetEl);
+          pitchDeg = this._pitchToTarget(rig, targetEl);
+        }
+      } else if (stop.rot) {
+        const r = parseVec3String(stop.rot);
+        if (r) {
+          // yaw no rig, pitch na câmara; ignora roll
+          yawStr = `0 ${r.y} 0`;
+          pitchDeg = Number(r.x) || 0;
+        }
+      }
+
+      if (yawStr) {
+        if (this.reducedMotion) {
+          rig.setAttribute("rotation", yawStr);
+          rig.removeAttribute("animation__rot");
+        } else {
+          rig.setAttribute("animation__rot", {
+            property: "rotation",
+            to: yawStr,
+            dur: lookDur,
             easing: "easeInOutQuad",
           });
         }
       }
-    }
-    // -----------------------------
-    // 2) ROTAÇÃO (yaw no rig; pitch na câmara)
-    // -----------------------------
-    let yawStr = null;
-    let pitchDeg = 0;
 
-    if (stop.target) {
-      const targetEl = document.querySelector(stop.target);
-      if (targetEl) {
-        yawStr = this._yawToTarget(rig, targetEl);
-        pitchDeg = this._pitchToTarget(rig, targetEl);
-      }
-    } else if (stop.rot) {
-      const r = parseVec3String(stop.rot);
-      if (r) {
-        // yaw no rig, pitch na câmara; ignora roll
-        yawStr = `0 ${r.y} 0`;
-        pitchDeg = Number(r.x) || 0;
-      }
-    }
-
-    if (yawStr) {
-      if (this.reducedMotion) {
-        rig.setAttribute("rotation", yawStr);
-        rig.removeAttribute("animation__rot");
-      } else {
-        rig.setAttribute("animation__rot", {
-          property: "rotation",
-          to: yawStr,
-          dur: lookDur,
-          easing: "easeInOutQuad",
-        });
-      }
-    }
-
-    // Pitch: aplicar via look-controls para não “rodar o mundo”.
-    const camEl = document.querySelector("#cam");
-    const lc = camEl?.components?.["look-controls"];
-    const applyPitch = (deg) => {
-      if (!lc?.pitchObject) return;
-      lc.pitchObject.rotation.x = THREE.MathUtils.degToRad(Number(deg) || 0);
-      // limpa roll para evitar inclinação lateral
-      lc.pitchObject.rotation.z = 0;
-    };
-
-    // Se não houver stop.rot/target, volta a pitch 0 para não "herdar" do stop anterior.
-    if (!stop.target && !stop.rot) pitchDeg = 0;
-
-    if (this.reducedMotion || lookDur <= 0) {
-      applyPitch(pitchDeg);
-    } else {
-      const startPitch = lc?.pitchObject
-        ? THREE.MathUtils.radToDeg(lc.pitchObject.rotation.x)
-        : 0;
-      const start = performance.now();
-      const dur = Math.max(0, Number(lookDur) || 0);
-      const step = (now) => {
-        const t = clamp((now - start) / dur, 0, 1);
-        // easeInOutQuad
-        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-        const v = startPitch + (pitchDeg - startPitch) * eased;
-        applyPitch(v);
-        if (t < 1 && this.running && !this.paused) requestAnimationFrame(step);
+      // Pitch: aplicar via look-controls para não “rodar o mundo”.
+      const camEl = document.querySelector("#cam");
+      const lc = camEl?.components?.["look-controls"];
+      const applyPitch = (deg) => {
+        if (!lc?.pitchObject) return;
+        lc.pitchObject.rotation.x = THREE.MathUtils.degToRad(Number(deg) || 0);
+        // limpa roll para evitar inclinação lateral
+        lc.pitchObject.rotation.z = 0;
       };
-      requestAnimationFrame(step);
-    }
 
-    const afterMove = this.reducedMotion ? 0 : moveDur;
-    const minInterDelay = afterMove === 0 ? 80 : 0;
+      // Se não houver stop.rot/target, volta a pitch 0 para não "herdar" do stop anterior.
+      if (!stop.target && !stop.rot) pitchDeg = 0;
 
-    // ao chegar: texto/áudio
-    const t1 = setTimeout(() => {
-      if (!this.running || this.paused) return;
-
-      setInfoCardTransition(false);
-
-      // Em vez de abrir a descrição completa automaticamente:
-      setInfoCardImage("", "");
-      showInfoCard(
-        stop.title || "Paragem",
-        "",
-        "Clica no quadro para ver a informação."
-      );
-
-      // áudio do stop (se estiveres a usar stop.audio) podes manter ou remover:
-      if (stop.audio && this.data.narrator) {
-        this.data.narrator.removeAttribute("sound");
-        this.data.narrator.setAttribute("sound", {
-          src: stop.audio,
-          autoplay: true,
-          positional: false,
-          volume: 1.0,
-        });
+      if (this.reducedMotion || lookDur <= 0) {
+        applyPitch(pitchDeg);
       } else {
-        this.data.narrator?.removeAttribute("sound");
+        const startPitch = lc?.pitchObject
+          ? THREE.MathUtils.radToDeg(lc.pitchObject.rotation.x)
+          : 0;
+        const start = performance.now();
+        const dur = Math.max(0, Number(lookDur) || 0);
+        const step = (now) => {
+          const t = clamp((now - start) / dur, 0, 1);
+          // easeInOutQuad
+          const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+          const v = startPitch + (pitchDeg - startPitch) * eased;
+          applyPitch(v);
+          if (t < 1 && this.running && !this.paused) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
       }
 
-      updateTourNav(true, i, this.stops.length);
-      this._applyPanel(stop);
+      const afterMove = this.reducedMotion ? 0 : moveDur;
+      const minInterDelay = afterMove === 0 ? 80 : 0;
 
-      // áudio
-      if (stop.audio && this.data.narrator) {
-        this.data.narrator.removeAttribute("sound");
-        this.data.narrator.setAttribute("sound", {
-          src: stop.audio,
-          autoplay: true,
-          positional: false,
-          volume: 1.0,
-        });
-      } else {
-        this.data.narrator?.removeAttribute("sound");
-      }
-
-      // NÃO remover animation__rot aqui (senão “mata” a rotação do stop)
-      updateTourNav(true, i, this.stops.length);
-    }, afterMove + minInterDelay);
-
-    // próximo stop (apenas se autoAdvance = true)
-    if (this.data.autoAdvance) {
-      const t2 = setTimeout(() => {
+      // ao chegar: texto/áudio
+      const t1 = setTimeout(() => {
         if (!this.running || this.paused) return;
-        this.idx = i + 1;
-        this._goToStop(this.idx);
-      }, afterMove + (this.reducedMotion ? 0 : lookDur) + wait);
-      this.timers.push(t1, t2);
-    } else {
-      this.timers.push(t1);
-    }
-  },
-});
+
+        setInfoCardTransition(false);
+
+        // Em vez de abrir a descrição completa automaticamente:
+        setInfoCardImage("", "");
+        showInfoCard(
+          stop.title || "Paragem",
+          "",
+          "Clica no quadro para ver a informação."
+        );
+
+        // áudio do stop (se estiveres a usar stop.audio) podes manter ou remover:
+        if (stop.audio && this.data.narrator) {
+          this.data.narrator.removeAttribute("sound");
+          this.data.narrator.setAttribute("sound", {
+            src: stop.audio,
+            autoplay: true,
+            positional: false,
+            volume: 1.0,
+          });
+        } else {
+          this.data.narrator?.removeAttribute("sound");
+        }
+
+        updateTourNav(true, i, this.stops.length);
+        this._applyPanel(stop);
+
+        // áudio
+        if (stop.audio && this.data.narrator) {
+          this.data.narrator.removeAttribute("sound");
+          this.data.narrator.setAttribute("sound", {
+            src: stop.audio,
+            autoplay: true,
+            positional: false,
+            volume: 1.0,
+          });
+        } else {
+          this.data.narrator?.removeAttribute("sound");
+        }
+
+        // NÃO remover animation__rot aqui (senão “mata” a rotação do stop)
+        updateTourNav(true, i, this.stops.length);
+      }, afterMove + minInterDelay);
+
+      // próximo stop (apenas se autoAdvance = true)
+      if (this.data.autoAdvance) {
+        const t2 = setTimeout(() => {
+          if (!this.running || this.paused) return;
+          this.idx = i + 1;
+          this._goToStop(this.idx);
+        }, afterMove + (this.reducedMotion ? 0 : lookDur) + wait);
+        this.timers.push(t1, t2);
+      } else {
+        this.timers.push(t1);
+      }
+    },
+  });
 
 AFRAME.registerComponent("teleport-surface", {
   schema: {
@@ -1976,7 +1976,7 @@ function syncMovementLock() {
 
   if (!rig) return;
 
-  // ✅ bloquear SEMPRE no welcome e quando o menu está aberto
+  //  bloquear SEMPRE no welcome e quando o menu está aberto
   const mustLock =
     welcomeVisible || experienceMode === "welcome" || menuOpen || inTour;
 
@@ -2283,6 +2283,34 @@ function blockMoveKeys(e, { allowLeftRight = false } = {}) {
   return true;
 }
 
+function renderStopsList(stops) {
+  const list = $("#stopsList");
+  if (!list) return;
+
+  list.innerHTML = "";
+  stops.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.className = "secondary";
+    b.textContent = `${i + 1}. ${s.title || "Stop"}`;
+
+    b.addEventListener("click", () => {
+      const tourC = $("#tour")?.components?.["tour-guide"];
+      if (!tourC) return;
+
+      localStorage.setItem("virtumuseum.lastStopIdx", String(i));
+
+      if (experienceMode !== "tour") {
+        showToast("Teleports disponíveis apenas na visita guiada.");
+        return;
+      }
+      tourC.teleportTo?.(i);
+    });
+
+    list.appendChild(b);
+  });
+}
+
+
 function setupUI() {
   $("#btnMenu")?.addEventListener("click", toggleMenu);
   $("#btnHUD")?.addEventListener("click", () =>
@@ -2303,6 +2331,25 @@ function setupUI() {
   $("#btnInfoImgToggle")?.addEventListener("click", () =>
     setInfoCardImageHidden(!infoCardImageHidden)
   );
+
+    // Help modal wiring
+  $("#btnHelpModalClose")?.addEventListener("click", () => setHelpModalOpen(false));
+  $("#btnHelpModalOk")?.addEventListener("click", () => setHelpModalOpen(false));
+  $("#helpModalBackdrop")?.addEventListener("click", () => setHelpModalOpen(false));
+
+  // Esc fecha o modal de ajuda (sem matar o tour por acidente)
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key === "Escape" && isHelpModalOpen()) {
+        e.preventDefault();
+        e.stopPropagation();
+        setHelpModalOpen(false);
+      }
+    },
+    { capture: true }
+  );
+
 
   // Welcome buttons
   $("#btnEnterExplore")?.addEventListener("click", () =>
@@ -2489,88 +2536,125 @@ function setupUI() {
   });
 
   // comandos de voz
-  voice.onCommand = (text) => {
-    const t = text.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove acentos
-    const tourC = $("#tour")?.components?.["tour-guide"];
-    if (!tourC) return;
+voice.onCommand = (text) => {
+  const t = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-    if (t.includes("iniciar") || t.includes("comecar")) {
-      // Start "a sério": sai do welcome/menu e reseta para o spawn.
-      enterExperience("tour");
-    } else if (t.includes("pausar")) tourC.pause();
-    else if (t.includes("retomar") || t.includes("continuar")) tourC.resume();
-    else if (t.includes("parar") || t.includes("sair") || t.includes("stop"))
-      tourC.stop();
-    else if (t.includes("proxima") || t.includes("seguinte")) tourC.next();
-    else if (t.includes("anterior") || t.includes("antes")) tourC.prev();
-    // Comandos para mostrar ou ocultar imagem do quadro
-    else if (
-      t.includes("imagem on") ||
-      t.includes("mostrar imagem") ||
-      t.includes("on") ||
-      t.includes("imagem ligar")
-    ) {
-      setInfoCardImageHidden(false);
-      showToast("Imagens ativadas.");
-    } else if (
-      t.includes("imagem off") ||
-      t.includes("ocultar imagem") ||
-      t.includes("off") ||
-      t.includes("imagem desligar")
-    ) {
-      setInfoCardImageHidden(true);
-      showToast("Imagens ocultadas.");
-    } else if (
-      t.includes("ocultar painel") ||
-      t.includes("ocultar info") ||
-      t.includes("ocultar") ||
-      t.includes("fechar painel")
-    ) {
-      setInfoCardCollapsed(true);
-    } else if (
-      t.includes("mostrar painel") ||
-      t.includes("mostrar info") ||
-      t.includes("mostrar") ||
-      t.includes("abrir painel")
-    ) {
-      setInfoCardCollapsed(false);
-    } else if (t.includes("menu")) toggleMenu();
-    else if (t.includes("ajuda")) showHelp();
-    else if (t.includes("lanterna")) toggleFlashlight();
-    else if (t.includes("foto") || t.includes("captura")) takePhoto();
-  };
+  // Se o modal de ajuda estiver aberto, deixa a voz fechá-lo
+  if (isHelpModalOpen()) {
+    const wantsClose =
+      t.includes("fechar") ||
+      t.includes("ok") ||
+      t.includes("fecha") ||
+      t.includes("confirmar") ||
+      t.includes("sair") ||
+      t.includes("voltar");
+
+    if (wantsClose) {
+      setHelpModalOpen(false);
+      return; // importante: não deixa o comando “cair” no resto
+    }
+  }
+
+  // 2)  VOLTAR AO ECRÃ INICIAL (equivalente ao botão)
+  if (
+    t.includes("voltar") ||
+    t.includes("voltar ao inicio") ||
+    t.includes("voltar ao ecrã inicial") ||
+    t.includes("ecra inicial") ||
+    t.includes("inicio")
+  ) {
+    backToWelcome();
+    return;
+  }
+
+ 
+  document.addEventListener("fullscreenchange", syncFullscreenButtons);
+
+  const tourC = $("#tour")?.components?.["tour-guide"];
+  if (!tourC) return;
+
+  if (t.includes("iniciar") || t.includes("comecar")) {
+    enterExperience("tour");
+  } else if (t.includes("pausar")) tourC.pause();
+  else if (t.includes("retomar") || t.includes("continuar")) tourC.resume();
+  else if (t.includes("parar") || t.includes("sair") || t.includes("stop"))
+    tourC.stop();
+  else if (t.includes("explorar ") || t.includes("livremente"))
+    enterExperience("explore");
+  else if (t.includes("visita guiada") || t.includes("visita"))
+    enterExperience("tour");
+  else if (t.includes("Fullscreen") || t.includes("ecrã inteiro")) {
+    toggleFullscreen();
+  } else if (t.includes("proxima") || t.includes("seguinte")) tourC.next();
+  else if (t.includes("anterior") || t.includes("antes")) tourC.prev();
+  else if (
+    t.includes("imagem on") ||
+    t.includes("mostrar imagem") ||
+    t.includes("imagem ligar")
+  ) {
+    setInfoCardImageHidden(false);
+    showToast("Imagens ativadas.");
+  } else if (
+    t.includes("imagem off") ||
+    t.includes("ocultar imagem") ||
+    t.includes("imagem desligar")
+  ) {
+    setInfoCardImageHidden(true);
+    showToast("Imagens ocultadas.");
+  } else if (
+    t.includes("ocultar painel") ||
+    t.includes("ocultar info") ||
+    t.includes("fechar painel")
+  ) {
+    setInfoCardCollapsed(true);
+  } else if (
+    t.includes("mostrar painel") ||
+    t.includes("mostrar info") ||
+    t.includes("abrir painel")
+  ) {
+    setInfoCardCollapsed(false);
+  } else if (t.includes("menu")) toggleMenu();
+  else if (t.includes("ajuda")) showHelp();
+  else if (t.includes("lanterna")) toggleFlashlight();
+  else if (t.includes("foto") || t.includes("captura")) takePhoto();
+};
+
+
 
   // help
   $("#btnHelp")?.addEventListener("click", showHelp);
 
-  // stops list (teleports)
-  window.addEventListener("tour:stopsLoaded", (e) => {
-    const stops = e.detail?.stops || [];
+  
+function showHelp() {
+  const msg =
+    "Ajuda / comandos:\n\n" +
+    "- Menu: tecla M (ou botão Menu)\n" +
+    "- Iniciar visita: Enter (ou botão Iniciar)\n" +
+    "- Próxima paragem: N\n" +
+    "- Paragem anterior: Q\n\n" +
+    "Voz (se suportado):\n" +
+    'Diz "iniciar visita", "próxima", "anterior", "menu", "mostrar painel", "ocultar painel", "imagem on", "imagem off", "ajuda", "lanterna", "foto".';
 
-    // aplica 4 paredes baseadas nas posições reais dos stops (sem depender de paintings.json)
+  setHelpModalOpen(true, msg);
+}
+
+  // stops list (teleports)
+ // stops list (teleports)
+window.addEventListener("tour:stopsLoaded", (e) => {
+  const stops = e.detail?.stops || [];
+
+  // 1) Primeiro: mostra SEMPRE a lista
+  renderStopsList(stops);
+
+  //  2) Depois: coisas extra (paredes) sem poderem estragar a lista
+  try {
     const computed = computeBoundsFromStops(stops);
     if (computed) applyFourWalls(computed, { visual: true });
+  } catch (err) {
+    console.warn("[tour] walls failed, but stops list rendered:", err);
+  }
+});
 
-    const list = $("#stopsList");
-    if (!list) return;
-    list.innerHTML = "";
-    stops.forEach((s, i) => {
-      const b = document.createElement("button");
-      b.className = "secondary";
-      b.textContent = `${i + 1}. ${s.title || "Stop"}`;
-      b.addEventListener("click", () => {
-        const tourC = $("#tour")?.components?.["tour-guide"];
-        if (!tourC) return;
-        localStorage.setItem("virtumuseum.lastStopIdx", String(i));
-        if (experienceMode !== "tour") {
-          showToast("Teleports disponíveis apenas na visita guiada.");
-          return;
-        }
-        tourC.teleportTo?.(i);
-      });
-      list.appendChild(b);
-    });
-  });
 
   // atalhos
   window.addEventListener(
@@ -2867,18 +2951,41 @@ async function enterExperience(mode) {
   syncMovementLock();
 }
 
-function showHelp() {
-  const msg =
-    "Ajuda / comandos:\n\n" +
-    "- Menu: tecla M (ou botão Menu)\n" +
-    "- Iniciar visita: Enter (ou botão Iniciar)\n" +
-    "- Pausar/Retomar: Space\n" +
-    "- Próxima paragem: N\n" +
-    "- Parar visita: Esc\n\n" +
-    "Voz (se suportado):\n" +
-    'Diz "iniciar visita", "pausar", "retomar", "parar", "próxima", "menu", "ajuda".';
-  alert(msg);
+let _helpLastFocusEl = null;
+
+function isHelpModalOpen() {
+  return !$("#helpModal")?.classList.contains("is-hidden");
 }
+
+function setHelpModalOpen(open, text = "") {
+  const modal = $("#helpModal");
+  const body = $("#helpModalBody");
+  if (!modal || !body) return;
+
+  if (open) {
+    _helpLastFocusEl = document.activeElement;
+    body.textContent = text || "";
+
+    modal.classList.remove("is-hidden");
+    modal.setAttribute("aria-hidden", "false");
+
+    // foco no botão fechar
+    setTimeout(() => $("#btnHelpModalClose")?.focus?.(), 0);
+
+    // opcional: bloquear movimento enquanto modal está aberto
+    try { syncMovementLock(); } catch {}
+  } else {
+    modal.classList.add("is-hidden");
+    modal.setAttribute("aria-hidden", "true");
+
+    // devolve o foco
+    try { _helpLastFocusEl?.focus?.(); } catch {}
+
+    try { syncMovementLock(); } catch {}
+  }
+}
+
+
 
 function initApp() {
   setupUI();

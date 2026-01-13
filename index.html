@@ -189,20 +189,20 @@
             <button id="btnFlashlight" class="secondary" title="Lanterna (F)">
               Lanterna
             </button>
-            <button
+          <!--   <button
               id="btnReset"
               class="secondary"
               title="Reset posição/rotação"
             >
               Reset
-            </button>
-            <button
+            </button> -->
+          <!--   <button
               id="btnCopyPose"
               class="secondary"
               title="Copiar pos/rot atuais"
             >
               Copiar pose
-            </button>
+            </button> -->
           </div>
           <div class="ui__hint">
             Extra: <b>Q</b>/<b>E</b> anterior/seguinte · <b>C</b> foto ·
@@ -282,6 +282,25 @@
         Dica: usa ← / → para navegar na visita.
       </div>
     </div>
+
+    <!-- Help Modal -->
+<div class="modal is-hidden" id="helpModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="helpModalTitle">
+  <div class="modal__backdrop" id="helpModalBackdrop"></div>
+
+  <div class="modal__card" role="document">
+    <div class="modal__header">
+      <div class="modal__title" id="helpModalTitle">Ajuda</div>
+      <button class="secondary modal__close" id="btnHelpModalClose" type="button" aria-label="Fechar">✕</button>
+    </div>
+
+    <div class="modal__body" id="helpModalBody"></div>
+
+    <div class="modal__footer">
+      <button class="secondary" id="btnHelpModalOk" type="button">OK</button>
+    </div>
+  </div>
+</div>
+
 
     <a-scene
       keyboard-shortcuts="enterVR: false"
