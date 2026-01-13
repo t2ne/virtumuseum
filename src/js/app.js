@@ -585,7 +585,7 @@ class VoiceController {
     this.rec = new this.SR();
     this.rec.lang = "pt-PT";
     this.rec.interimResults = false;
-    this.rec.continuous = true;
+    this.rec.continuous = false;
     this.running = true;
 
     this.rec.onresult = (e) => {
@@ -1059,7 +1059,7 @@ AFRAME.registerComponent("tour-guide", {
     // -----------------------------
     let rotStr = null;
 
-    if (stop.target) {
+    /* if (stop.target) {
       // se tens target, mantém yaw para o alvo (sem inclinar)
       const targetEl = document.querySelector(stop.target);
       if (targetEl) rotStr = this._yawToTarget(rig, targetEl); // "0 Y 0"
@@ -1067,6 +1067,15 @@ AFRAME.registerComponent("tour-guide", {
       const r = parseVec3String(stop.rot);
       // UX: evitar inclinação (roll/pitch) -> usa apenas yaw
       if (r) rotStr = `0 ${r.y} 0`;
+    } */
+
+      if (stop.target) {
+      const targetEl = document.querySelector(stop.target);
+      if (targetEl) rotStr = this._yawToTarget(rig, targetEl);
+    } else if (stop.rot) {
+      const r = parseVec3String(stop.rot);
+      // Permite inclinação vertical (pitch) para olhar para cima/baixo
+      if (r) rotStr = `${r.x} ${r.y} ${r.z}`;
     }
 
     if (rotStr) {
@@ -1816,6 +1825,32 @@ function setupUI() {
     else if (t.includes("parar") || t.includes("sair") || t.includes("stop"))
       tourC.stop();
     else if (t.includes("proxima") || t.includes("seguinte")) tourC.next();
+        else if (t.includes("anterior") || t.includes("antes")) tourC.prev();
+  // Comandos para mostrar ou ocultar imagem do quadro
+  else if (t.includes("imagem on") || t.includes("mostrar imagem") || t.includes("on") || t.includes("imagem ligar")) {
+    setInfoCardImageHidden(false);
+    showToast("Imagens ativadas.");
+  }
+  else if (t.includes("imagem off") || t.includes("ocultar imagem")  || t.includes("off")|| t.includes("imagem desligar")) {
+    setInfoCardImageHidden(true);
+    showToast("Imagens ocultadas.");
+  }
+
+   else if (
+    t.includes("ocultar painel") ||
+    t.includes("ocultar info") || t.includes("ocultar") ||
+    t.includes("fechar painel")
+  ) {
+    setInfoCardCollapsed(true);
+   }
+  else if (
+    t.includes("mostrar painel") ||
+    t.includes("mostrar info") || t.includes("mostrar") ||
+    t.includes("abrir painel")
+  ) {
+    setInfoCardCollapsed(false);
+   }
+
     else if (t.includes("menu")) toggleMenu();
     else if (t.includes("ajuda")) showHelp();
     else if (t.includes("lanterna")) toggleFlashlight();
