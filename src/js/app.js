@@ -108,16 +108,54 @@ function syncMobileJoystickVisibility() {
   el.setAttribute("aria-hidden", String(!shouldShow));
 }
 
-function moveRigFromJoystick(dtMs) {
-  if (!joystickState.active) return;
-  if (Math.abs(joystickState.x) < 0.02 && Math.abs(joystickState.y) < 0.02)
-    return;
+function getMoveSpeedUi() {
+  return clamp(
+    Number(localStorage.getItem("virtumuseum.moveSpeed") || "2") || 2,
+    1,
+    6
+  );
+}
+
+function getMoveSpeedUnitsPerSec() {
+  // Mapeamento linear (igual para teclado e joystick).
+  // Range anterior (1.2..7.2 u/s) estava demasiado rápido para o scale do museu.
+  // Novo range: ~0.22..1.32 u/s
+  return getMoveSpeedUi() * 0.05;
+}
+
+function getKeyboardMoveVector() {
+  // x: strafe (direita +) | y: forward (frente +)
+  let x = 0;
+  let y = 0;
+
+  const has = (k) => movementKeysDown.has(k);
+  // Letras
+  if (has("w")) y += 1;
+  if (has("s")) y -= 1;
+  if (has("d")) x += 1;
+  if (has("a")) x -= 1;
+  // Setas (compat)
+  if (has("ArrowUp") || has("arrowup")) y += 1;
+  if (has("ArrowDown") || has("arrowdown")) y -= 1;
+  if (has("ArrowRight") || has("arrowright")) x += 1;
+  if (has("ArrowLeft") || has("arrowleft")) x -= 1;
+
+  // normaliza (evita diagonal mais rápida)
+  const m = Math.hypot(x, y);
+  if (m > 1e-6 && m > 1) {
+    x /= m;
+    y /= m;
+  }
+  return { x, y };
+}
+
+function applyManualMove(dtMs, x, y) {
+  if (Math.abs(x) < 0.01 && Math.abs(y) < 0.01) return;
 
   const rig = $("#rig");
   const cam = $("#cam");
   if (!rig || !cam) return;
 
-  // segurança: não mover fora de exploração
   const menuOpen = $("#menuPanel")?.classList.contains("is-open");
   const welcomeVisible = !$("#welcome")?.classList.contains("is-hidden");
   const tourC = $("#tour")?.components?.["tour-guide"];
@@ -125,20 +163,15 @@ function moveRigFromJoystick(dtMs) {
   if (experienceMode !== "explore" || welcomeVisible || menuOpen || inTour)
     return;
 
-  const uiMove = clamp(
-    Number(localStorage.getItem("virtumuseum.moveSpeed") || "2") || 2,
-    1,
-    6
-  );
-  const speed = uiMove * 0.55; // unidades/seg (ajustado ao scale do museu)
-  const dt = Math.max(0, Number(dtMs) || 0) / 1000;
-
-  // direções a partir do yaw atual da câmara
   const THREE = window.THREE;
   if (!THREE) return;
 
+  const speed = getMoveSpeedUnitsPerSec();
+  const dt = Math.max(0, Number(dtMs) || 0) / 1000;
+
   const forward = new THREE.Vector3();
-  cam.object3D.getWorldDirection(forward);
+  const camObj = cam.getObject3D?.("camera") || cam.object3D;
+  camObj.getWorldDirection(forward);
   forward.y = 0;
   if (forward.lengthSq() < 1e-6) return;
   forward.normalize();
@@ -146,20 +179,19 @@ function moveRigFromJoystick(dtMs) {
   const up = new THREE.Vector3(0, 1, 0);
   const right = new THREE.Vector3().crossVectors(forward, up).normalize();
 
-  const raw = new THREE.Vector3();
-  const f = -joystickState.y; // y<0 (para cima) => avançar
-  raw.addScaledVector(forward, f);
-  raw.addScaledVector(right, joystickState.x);
+  const delta = new THREE.Vector3();
+  delta.addScaledVector(forward, y);
+  delta.addScaledVector(right, x);
 
-  const mag = raw.length();
-  if (mag > 1) raw.multiplyScalar(1 / mag);
-  raw.multiplyScalar(speed * dt);
+  const mag = delta.length();
+  if (mag > 1) delta.multiplyScalar(1 / mag);
+  delta.multiplyScalar(speed * dt);
 
   const p = rig.getAttribute("position");
   const next = {
-    x: (p?.x || 0) + raw.x,
+    x: (p?.x || 0) + delta.x,
     y: p?.y || 0,
-    z: (p?.z || 0) + raw.z,
+    z: (p?.z || 0) + delta.z,
   };
 
   const bounds = getBoundsForRig(rig);
@@ -167,21 +199,38 @@ function moveRigFromJoystick(dtMs) {
   rig.setAttribute("position", vec3ToString(clamped));
 }
 
+function startManualMovementLoop() {
+  let last = performance.now();
+  const frame = (now) => {
+    const dt = now - last;
+    last = now;
+
+    // teclado
+    const k = getKeyboardMoveVector();
+
+    // joystick (só quando ativo)
+    const jx = joystickState.active ? joystickState.x : 0;
+    const jy = joystickState.active ? joystickState.y : 0;
+
+    // combina (normaliza dentro do apply)
+    applyManualMove(dt, k.x + jx, k.y + jy);
+
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+function moveRigFromJoystick(dtMs) {
+  // Mantido por compat (antigo loop). O movimento real está no loop unificado.
+  // Se por algum motivo ainda for chamado, usa o mesmo motor.
+  applyManualMove(dtMs, joystickState.x, joystickState.y);
+}
+
 function initMobileJoystick() {
   const wrap = $("#mobileJoystick");
   const base = $("#mobileJoystickBase");
   const stick = $("#mobileJoystickStick");
   if (!wrap || !base || !stick) return;
-
-  // loop de movimento
-  let last = performance.now();
-  const frame = (now) => {
-    const dt = now - last;
-    last = now;
-    moveRigFromJoystick(dt);
-    requestAnimationFrame(frame);
-  };
-  requestAnimationFrame(frame);
 
   const refreshCenter = () => {
     const r = base.getBoundingClientRect();
@@ -200,7 +249,8 @@ function initMobileJoystick() {
     const clampedX = dx * k;
     const clampedY = dy * k;
 
-    setJoystickVector(clampedX / maxR, clampedY / maxR);
+    // y em ecrã cresce para baixo; queremos +Y = avançar
+    setJoystickVector(clampedX / maxR, -clampedY / maxR);
 
     stick.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`;
   };
@@ -1091,8 +1141,9 @@ AFRAME.registerComponent("tour-guide", {
     if (leavingTour) experienceMode = "explore";
     syncBodyModeClasses();
     this._clearTimers();
+    // Movimento manual (teclado/joystick) — mantém wasd-controls sempre desligado.
     if (leavingTour)
-      this.data.rig?.setAttribute("wasd-controls", "enabled", true);
+      this.data.rig?.setAttribute("wasd-controls", "enabled", false);
     setTeleportEnabled(false);
     this.data.panel?.setAttribute("visible", false);
     this.data.narrator?.removeAttribute("sound");
@@ -1193,6 +1244,29 @@ AFRAME.registerComponent("tour-guide", {
     return `0 ${yawDeg} 0`;
   },
 
+  _pitchToTarget: function (rigEl, targetEl) {
+    // Pitch para olhar para cima/baixo sem inclinar o mundo:
+    // aplica-se depois na câmara (look-controls), não no rig.
+    const camEl = document.querySelector("#cam");
+    const camObj = camEl?.getObject3D?.("camera") || camEl?.object3D;
+    if (!camObj) return 0;
+
+    const camPos = new THREE.Vector3();
+    const tgtPos = new THREE.Vector3();
+    camObj.getWorldPosition(camPos);
+    targetEl.object3D.getWorldPosition(tgtPos);
+
+    const dx = tgtPos.x - camPos.x;
+    const dy = tgtPos.y - camPos.y;
+    const dz = tgtPos.z - camPos.z;
+    const horiz = Math.hypot(dx, dz);
+    if (horiz < 1e-6) return 0;
+
+    const pitchRad = Math.atan2(dy, horiz);
+    // Em three.js, X positivo olha para baixo, portanto invertimos.
+    return -THREE.MathUtils.radToDeg(pitchRad);
+  },
+
   _applyPanel: function (stop) {
     // Mostra UI HTML (não tapa o ecrã como o painel 3D)
     setInfoCardImage(stop?.imageUrl || "", stop?.title || "");
@@ -1255,41 +1329,70 @@ AFRAME.registerComponent("tour-guide", {
       }
     }
     // -----------------------------
-    // 2) ROTAÇÃO (target OU rot)
+    // 2) ROTAÇÃO (yaw no rig; pitch na câmara)
     // -----------------------------
-    let rotStr = null;
-
-    /* if (stop.target) {
-      // se tens target, mantém yaw para o alvo (sem inclinar)
-      const targetEl = document.querySelector(stop.target);
-      if (targetEl) rotStr = this._yawToTarget(rig, targetEl); // "0 Y 0"
-    } else if (stop.rot) {
-      const r = parseVec3String(stop.rot);
-      // UX: evitar inclinação (roll/pitch) -> usa apenas yaw
-      if (r) rotStr = `0 ${r.y} 0`;
-    } */
+    let yawStr = null;
+    let pitchDeg = 0;
 
     if (stop.target) {
       const targetEl = document.querySelector(stop.target);
-      if (targetEl) rotStr = this._yawToTarget(rig, targetEl);
+      if (targetEl) {
+        yawStr = this._yawToTarget(rig, targetEl);
+        pitchDeg = this._pitchToTarget(rig, targetEl);
+      }
     } else if (stop.rot) {
       const r = parseVec3String(stop.rot);
-      // Permite inclinação vertical (pitch) para olhar para cima/baixo
-      if (r) rotStr = `${r.x} ${r.y} ${r.z}`;
+      if (r) {
+        // yaw no rig, pitch na câmara; ignora roll
+        yawStr = `0 ${r.y} 0`;
+        pitchDeg = Number(r.x) || 0;
+      }
     }
 
-    if (rotStr) {
+    if (yawStr) {
       if (this.reducedMotion) {
-        rig.setAttribute("rotation", rotStr);
+        rig.setAttribute("rotation", yawStr);
         rig.removeAttribute("animation__rot");
       } else {
         rig.setAttribute("animation__rot", {
           property: "rotation",
-          to: rotStr,
+          to: yawStr,
           dur: lookDur,
           easing: "easeInOutQuad",
         });
       }
+    }
+
+    // Pitch: aplicar via look-controls para não “rodar o mundo”.
+    const camEl = document.querySelector("#cam");
+    const lc = camEl?.components?.["look-controls"];
+    const applyPitch = (deg) => {
+      if (!lc?.pitchObject) return;
+      lc.pitchObject.rotation.x = THREE.MathUtils.degToRad(Number(deg) || 0);
+      // limpa roll para evitar inclinação lateral
+      lc.pitchObject.rotation.z = 0;
+    };
+
+    // Se não houver stop.rot/target, volta a pitch 0 para não "herdar" do stop anterior.
+    if (!stop.target && !stop.rot) pitchDeg = 0;
+
+    if (this.reducedMotion || lookDur <= 0) {
+      applyPitch(pitchDeg);
+    } else {
+      const startPitch = lc?.pitchObject
+        ? THREE.MathUtils.radToDeg(lc.pitchObject.rotation.x)
+        : 0;
+      const start = performance.now();
+      const dur = Math.max(0, Number(lookDur) || 0);
+      const step = (now) => {
+        const t = clamp((now - start) / dur, 0, 1);
+        // easeInOutQuad
+        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        const v = startPitch + (pitchDeg - startPitch) * eased;
+        applyPitch(v);
+        if (t < 1 && this.running && !this.paused) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
     }
 
     const afterMove = this.reducedMotion ? 0 : moveDur;
@@ -1515,7 +1618,9 @@ function syncMovementLock() {
   const mustLock =
     welcomeVisible || experienceMode === "welcome" || menuOpen || inTour;
 
-  rig.setAttribute("wasd-controls", "enabled", !mustLock);
+  // Importante: não usamos o motor do wasd-controls para movimento.
+  // Mantém sempre desligado para teclado/joystick usarem o mesmo caminho.
+  rig.setAttribute("wasd-controls", "enabled", false);
 
   // (opcional mas recomendado) também bloquear rotação enquanto menu/welcome
   if (cam) {
@@ -1527,6 +1632,11 @@ function syncMovementLock() {
   const wc = rig.components?.["wasd-controls"];
   if (mustLock && wc?.velocity) {
     wc.velocity.set(0, 0, 0);
+  }
+
+  if (mustLock) {
+    movementKeysDown.clear();
+    resetJoystick();
   }
 
   syncMobileJoystickVisibility();
@@ -2325,9 +2435,11 @@ function setMoveSpeed(accel) {
   const rig = $("#rig");
   if (!rig) return;
   const uiVal = clamp(Number(accel) || 2, 1, 6);
-  // O museu está escalado (0.01), portanto precisamos de aceleração bem menor.
-  const internal = clamp(uiVal * 0.12, 0.08, 0.9);
-  rig.setAttribute("wasd-controls", "acceleration", internal);
+  // Slider é a fonte da verdade para a velocidade.
+  // O movimento (teclado/joystick) usa getMoveSpeedUnitsPerSec().
+  // Mantemos valores também no wasd-controls só para consistência/debug,
+  // mas o componente fica sempre com enabled=false.
+  rig.setAttribute("wasd-controls", "acceleration", clamp(uiVal * 1.0, 0.5, 8));
   localStorage.setItem("virtumuseum.moveSpeed", String(uiVal));
   const r1 = $("#rngMoveSpeed");
   const r2 = $("#rngMoveSpeedMenu");
@@ -2371,7 +2483,7 @@ async function enterExperience(mode) {
     syncBodyModeClasses();
     tour.stop();
     setTeleportEnabled(false);
-    rig.setAttribute("wasd-controls", "enabled", true);
+    rig.setAttribute("wasd-controls", "enabled", false);
     updateTourNav(false);
     hideInfoCard();
     showToast("Exploração livre ativa.");
@@ -2406,6 +2518,9 @@ function initApp() {
 
   // joystick overlay (só em touch/mobile)
   initMobileJoystick();
+
+  // movimento unificado (teclado + joystick)
+  startManualMovementLoop();
 
   // garante que o spawn fica inicializado logo no arranque
   initSpawnPoseOnce();
