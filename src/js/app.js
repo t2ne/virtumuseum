@@ -196,6 +196,12 @@ function applyManualMove(dtMs, x, y) {
 
   const bounds = getBoundsForRig(rig);
   const clamped = clampPosToBounds(next, bounds);
+  if (
+    Math.abs(clamped.x - next.x) > 1e-4 ||
+    Math.abs(clamped.z - next.z) > 1e-4
+  ) {
+    notifyWallHit();
+  }
   rig.setAttribute("position", vec3ToString(clamped));
 }
 
@@ -548,6 +554,8 @@ function vec3ToString(p) {
 }
 
 function getBoundsForRig(rigEl) {
+  // Prefer bounds applied by our 4-walls system (doesn't depend on component init timing).
+  if (activeGalleryBounds) return activeGalleryBounds;
   const bk = rigEl?.components?.["bounds-keeper"];
   const d = bk?.data;
   if (!d) return { minX: -60, maxX: 60, minZ: -80, maxZ: 80, y: 0 };
@@ -566,6 +574,170 @@ function clampPosToBounds(pos, bounds) {
     y: bounds.y,
     z: clamp(pos.z, bounds.minZ, bounds.maxZ),
   };
+}
+
+// --- 4 WALLS (simple bounds + optional visual boxes) ---
+
+const DEFAULT_GALLERY_BOUNDS = {
+  // fallback seguro se os stops não carregarem (ex: abrir via file:// sem fetch)
+  // (um pouco mais largo do que o necessário, para evitar ficar "apertado")
+  minX: -22.0,
+  maxX: 14.0,
+  minZ: -13.0,
+  maxZ: 14.0,
+  y: 0,
+};
+
+let activeGalleryBounds = null;
+
+// Ajustes por parede (valores em metros):
+// - positivo = puxa a parede para dentro (mais "perto")
+// - negativo = empurra a parede para fora (menos "perto")
+// Ordem/nomes: north=maxZ, south=minZ, east=maxX, west=minX
+// Tuned by feedback: 1ª (+), 2ª (-), 3ª (tiny +), 4ª (tiny -)
+const WALL_TWEAK = {
+  north: -0.1,
+  south: -1.2,
+  east: 0.25,
+  west: 0.85,
+};
+
+function applyWallTweak(bounds) {
+  const b = { ...bounds };
+
+  // north/south (Z)
+  b.maxZ = Number(b.maxZ) - Number(WALL_TWEAK.north || 0);
+  b.minZ = Number(b.minZ) + Number(WALL_TWEAK.south || 0);
+
+  // east/west (X)
+  b.maxX = Number(b.maxX) - Number(WALL_TWEAK.east || 0);
+  b.minX = Number(b.minX) + Number(WALL_TWEAK.west || 0);
+
+  // sanity
+  if (b.maxX <= b.minX) {
+    const mid = (b.maxX + b.minX) / 2;
+    b.minX = mid - 0.1;
+    b.maxX = mid + 0.1;
+  }
+  if (b.maxZ <= b.minZ) {
+    const mid = (b.maxZ + b.minZ) / 2;
+    b.minZ = mid - 0.1;
+    b.maxZ = mid + 0.1;
+  }
+  return b;
+}
+
+let lastWallHitAt = 0;
+function notifyWallHit() {
+  const now = performance.now();
+  if (now - lastWallHitAt < 900) return;
+  lastWallHitAt = now;
+  showToast("Parede.");
+}
+
+function computeBoundsFromStops(stops, pad = 2.25) {
+  if (!Array.isArray(stops) || !stops.length) return null;
+  let minX = Infinity,
+    maxX = -Infinity,
+    minZ = Infinity,
+    maxZ = -Infinity;
+  let found = 0;
+
+  for (const s of stops) {
+    const p = parseVec3String(String(s?.pos || ""));
+    if (!p) continue;
+    found++;
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.z < minZ) minZ = p.z;
+    if (p.z > maxZ) maxZ = p.z;
+  }
+
+  if (!found) return null;
+  return {
+    minX: minX - pad,
+    maxX: maxX + pad,
+    minZ: minZ - pad,
+    maxZ: maxZ + pad,
+    y: 0,
+  };
+}
+
+function ensureVisualWalls(bounds) {
+  const scene = document.querySelector("a-scene");
+  if (!scene) return;
+
+  const ensure = (id) => {
+    let el = document.getElementById(id);
+    if (el) return el;
+    el = document.createElement("a-box");
+    el.setAttribute("id", id);
+    el.setAttribute(
+      "material",
+      "color: #7c5cff; opacity: 0.18; transparent: true; side: double"
+    );
+    el.setAttribute("shadow", "cast: false; receive: false");
+    scene.appendChild(el);
+    return el;
+  };
+
+  const wallH = 3;
+  const thick = 0.12;
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cz = (bounds.minZ + bounds.maxZ) / 2;
+  const w = Math.max(0.1, bounds.maxX - bounds.minX);
+  const d = Math.max(0.1, bounds.maxZ - bounds.minZ);
+
+  const n = ensure("wallNorth");
+  n.setAttribute("width", w);
+  n.setAttribute("height", wallH);
+  n.setAttribute("depth", thick);
+  n.setAttribute("position", `${cx} ${wallH / 2} ${bounds.maxZ}`);
+
+  const s = ensure("wallSouth");
+  s.setAttribute("width", w);
+  s.setAttribute("height", wallH);
+  s.setAttribute("depth", thick);
+  s.setAttribute("position", `${cx} ${wallH / 2} ${bounds.minZ}`);
+
+  const e = ensure("wallEast");
+  e.setAttribute("width", thick);
+  e.setAttribute("height", wallH);
+  e.setAttribute("depth", d);
+  e.setAttribute("position", `${bounds.maxX} ${wallH / 2} ${cz}`);
+
+  const o = ensure("wallWest");
+  o.setAttribute("width", thick);
+  o.setAttribute("height", wallH);
+  o.setAttribute("depth", d);
+  o.setAttribute("position", `${bounds.minX} ${wallH / 2} ${cz}`);
+}
+
+function applyFourWalls(bounds, { visual = true } = {}) {
+  const rig = $("#rig");
+  if (!rig || !bounds) return;
+  const raw = {
+    minX: Number(bounds.minX),
+    maxX: Number(bounds.maxX),
+    minZ: Number(bounds.minZ),
+    maxZ: Number(bounds.maxZ),
+    y: Number(bounds.y ?? 0),
+  };
+  if (![raw.minX, raw.maxX, raw.minZ, raw.maxZ, raw.y].every(Number.isFinite))
+    return;
+
+  const b = applyWallTweak(raw);
+
+  // torna as bounds imediatamente ativas para o clamp (mesmo antes do component init)
+  activeGalleryBounds = b;
+
+  // colisão real: clamp via bounds-keeper
+  rig.setAttribute(
+    "bounds-keeper",
+    `minX: ${b.minX}; maxX: ${b.maxX}; minZ: ${b.minZ}; maxZ: ${b.maxZ}; y: ${b.y}`
+  );
+
+  if (visual) ensureVisualWalls(b);
 }
 
 function setZoomFov(fov) {
@@ -1538,12 +1710,10 @@ AFRAME.registerComponent("bounds-keeper", {
 
     const p = this.el.getAttribute("position");
     if (p) {
+      const b = getBoundsForRig(this.el);
       const inside =
-        p.x >= this.data.minX &&
-        p.x <= this.data.maxX &&
-        p.z >= this.data.minZ &&
-        p.z <= this.data.maxZ;
-      if (inside) this.lastSafe = { x: p.x, y: this.data.y, z: p.z };
+        p.x >= b.minX && p.x <= b.maxX && p.z >= b.minZ && p.z <= b.maxZ;
+      if (inside) this.lastSafe = { x: p.x, y: b.y, z: p.z };
     }
   },
   tick: function () {
@@ -1551,19 +1721,18 @@ AFRAME.registerComponent("bounds-keeper", {
     const p = el.getAttribute("position");
     if (!p) return;
 
+    const b = getBoundsForRig(el);
+
     // força Y (evita drift)
-    if (typeof this.data.y === "number" && Math.abs(p.y - this.data.y) > 0.01) {
-      el.setAttribute("position", `${p.x} ${this.data.y} ${p.z}`);
+    if (typeof b.y === "number" && Math.abs(p.y - b.y) > 0.01) {
+      el.setAttribute("position", `${p.x} ${b.y} ${p.z}`);
     }
 
     const inside =
-      p.x >= this.data.minX &&
-      p.x <= this.data.maxX &&
-      p.z >= this.data.minZ &&
-      p.z <= this.data.maxZ;
+      p.x >= b.minX && p.x <= b.maxX && p.z >= b.minZ && p.z <= b.maxZ;
 
     if (inside) {
-      this.lastSafe = { x: p.x, y: this.data.y, z: p.z };
+      this.lastSafe = { x: p.x, y: b.y, z: p.z };
       return;
     }
 
@@ -1577,7 +1746,7 @@ AFRAME.registerComponent("bounds-keeper", {
         )} ${this.lastSafe.z.toFixed(3)}`
       );
     } else {
-      el.setAttribute("position", `0 ${this.data.y} 3`);
+      el.setAttribute("position", `0 ${b.y} 3`);
     }
 
     if (now - this.lastWarn > 1500) {
@@ -2184,6 +2353,11 @@ function setupUI() {
   // stops list (teleports)
   window.addEventListener("tour:stopsLoaded", (e) => {
     const stops = e.detail?.stops || [];
+
+    // aplica 4 paredes baseadas nas posições reais dos stops (sem depender de paintings.json)
+    const computed = computeBoundsFromStops(stops);
+    if (computed) applyFourWalls(computed, { visual: true });
+
     const list = $("#stopsList");
     if (!list) return;
     list.innerHTML = "";
@@ -2515,6 +2689,9 @@ function showHelp() {
 
 function initApp() {
   setupUI();
+
+  // 4 paredes "à volta" da galeria (fallback). Se os stops carregarem, isto é refinado.
+  applyFourWalls(DEFAULT_GALLERY_BOUNDS, { visual: true });
 
   // joystick overlay (só em touch/mobile)
   initMobileJoystick();
