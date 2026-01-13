@@ -16,7 +16,7 @@ Criar uma experiência **VR “desktop/mobile”** de museu virtual com **visita
   - Modo **Panorama 360** e **Vídeo 360**
   - Ajuda (atalhos) + acessibilidade (reduzir movimento)
 - **Voz (Web Speech)**: comandos como “iniciar visita”, “pausar”, “retomar”, “parar”, “próxima”, “ajuda”.
-- **Áudio sem ficheiros obrigatórios**: música ambiente e “chimes” gerados via WebAudio/Tone.js; narração opcional via `speechSynthesis`.
+- **Áudio sem ficheiros obrigatórios**: música ambiente  
 
 ### Use cases (1–2)
 1. **Visita guiada**: um utilizador entra no museu e segue uma rota com paragens e informação contextual.
