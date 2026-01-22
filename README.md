@@ -2,6 +2,8 @@
 
 Projeto para a UC de **Interaction and User Experience (VR/AR)**.
 
+<img width="1440" height="900" alt="Image" src="https://github.com/user-attachments/assets/c86ffd17-c35d-4bbe-8dca-250e4f6417e5" />
+
 ### Objetivo (resumo)
 Criar uma experiência **VR “desktop/mobile”** de museu virtual com **visita guiada automática**, **exploração livre**, **hotspots** informativos e **multimédia** (3D + áudio + panorama/vídeo 360).
 
