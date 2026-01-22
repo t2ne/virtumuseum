@@ -1,10 +1,63 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>VirtuMuseum</title>
     <link rel="icon" href="src/assets/images/b.png" type="image/png" />
+
+    <!-- Suppress noisy vendor console output (A-Frame/THREE banners, legacy lights warning).
+         To re-enable temporarily: add ?console=1 to the URL or set localStorage.virtumuseum.console=1 -->
+    <script>
+      (function () {
+        try {
+          const allowViaQuery =
+            typeof location !== "undefined" &&
+            new URLSearchParams(location.search).has("console");
+          const allowViaStorage =
+            localStorage.getItem("virtumuseum.console") === "1";
+          if (allowViaQuery || allowViaStorage) return;
+
+          const patterns = [
+            /A-Frame Version/i,
+            /THREE Version/i,
+            /WebVR Polyfill Version/i,
+            /THREE\.WebGLRenderer: The property \.useLegacyLights has been deprecated/i,
+          ];
+
+          const shouldSuppress = (args) => {
+            try {
+              const text = args
+                .map((a) => (typeof a === "string" ? a : ""))
+                .join(" ");
+              return patterns.some((re) => re.test(text));
+            } catch {
+              return false;
+            }
+          };
+
+          const origLog = console.log.bind(console);
+          const origInfo = (console.info || console.log).bind(console);
+          const origWarn = console.warn.bind(console);
+
+          console.log = (...args) => {
+            if (shouldSuppress(args)) return;
+            origLog(...args);
+          };
+          console.info = (...args) => {
+            if (shouldSuppress(args)) return;
+            origInfo(...args);
+          };
+          console.warn = (...args) => {
+            if (shouldSuppress(args)) return;
+            origWarn(...args);
+          };
+        } catch {
+          // noop
+        }
+      })();
+    </script>
+
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <link rel="stylesheet" href="src/css/style.css" />
   </head>
@@ -91,12 +144,15 @@
         </div>
 
         <div class="ui__section">
-          <div class="ui__sectionTitle">Som <!-- & Narração --></div>
+          <div class="ui__sectionTitle">
+            Som
+            <!-- & Narração -->
+          </div>
           <label class="ui__row">
             <input type="checkbox" id="chkAmbient" />
             <span>Música ambiente (calma)</span>
           </label>
-        <!--   <label class="ui__row">
+          <!--   <label class="ui__row">
             <input type="checkbox" id="chkTTS" />
             <span>Narração por voz (TTS)</span>
           </label> -->
@@ -189,14 +245,14 @@
             <button id="btnFlashlight" class="secondary" title="Lanterna (F)">
               Lanterna
             </button>
-          <!--   <button
+            <!--   <button
               id="btnReset"
               class="secondary"
               title="Reset posição/rotação"
             >
               Reset
             </button> -->
-          <!--   <button
+            <!--   <button
               id="btnCopyPose"
               class="secondary"
               title="Copiar pos/rot atuais"
@@ -213,7 +269,8 @@
         <div class="ui__section ui__section--foot">
           <div class="ui__hint">
             Atalhos: <b>M</b> menu · <b>Enter</b> iniciar ·
-           <!--  <b>Space</b> pausa/retoma · --> <b>N</b> próxima · <b>Esc</b> parar
+            <!--  <b>Space</b> pausa/retoma · -->
+            <b>N</b> próxima · <b>Esc</b> parar
           </div>
         </div>
       </div>
@@ -284,23 +341,38 @@
     </div>
 
     <!-- Help Modal -->
-<div class="modal is-hidden" id="helpModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="helpModalTitle">
-  <div class="modal__backdrop" id="helpModalBackdrop"></div>
+    <div
+      class="modal is-hidden"
+      id="helpModal"
+      role="dialog"
+      aria-modal="true"
+      aria-hidden="true"
+      aria-labelledby="helpModalTitle"
+    >
+      <div class="modal__backdrop" id="helpModalBackdrop"></div>
 
-  <div class="modal__card" role="document">
-    <div class="modal__header">
-      <div class="modal__title" id="helpModalTitle">Ajuda</div>
-      <button class="secondary modal__close" id="btnHelpModalClose" type="button" aria-label="Fechar">✕</button>
+      <div class="modal__card" role="document">
+        <div class="modal__header">
+          <div class="modal__title" id="helpModalTitle">Ajuda</div>
+          <button
+            class="secondary modal__close"
+            id="btnHelpModalClose"
+            type="button"
+            aria-label="Fechar"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div class="modal__body" id="helpModalBody"></div>
+
+        <div class="modal__footer">
+          <button class="secondary" id="btnHelpModalOk" type="button">
+            OK
+          </button>
+        </div>
+      </div>
     </div>
-
-    <div class="modal__body" id="helpModalBody"></div>
-
-    <div class="modal__footer">
-      <button class="secondary" id="btnHelpModalOk" type="button">OK</button>
-    </div>
-  </div>
-</div>
-
 
     <a-scene
       keyboard-shortcuts="enterVR: false"
@@ -381,7 +453,12 @@
         bounds-keeper="minX: -60; maxX: 60; minZ: -80; maxZ: 80; y: 0"
         print-aim
       >
-        <a-camera id="cam" position="0 1.6 0" look-controls="enabled: true">
+        <a-camera
+          id="cam"
+          position="0 1.6 0"
+          look-controls="enabled: true"
+          wasd-controls="enabled: false"
+        >
           <a-cursor
             raycaster="objects: .hotspot, .teleportable, .quadroHitbox"
             fuse="false"
@@ -482,7 +559,6 @@
 
             const marker = root.getObjectByName(planeName);
             if (!marker) {
-              console.warn(`${planeName} não encontrado no GLB.`);
               continue;
             }
 
@@ -537,7 +613,7 @@
         side: double;
         roughness: 1;
         metalness: 0;
-        `
+        `,
             );
 
             quadro.object3D.position.copy(pos);
@@ -556,7 +632,7 @@
             hit.setAttribute("height", height + 0.08);
             hit.setAttribute(
               "material",
-              "transparent:true; opacity:0; side: double"
+              "transparent:true; opacity:0; side: double",
             );
 
             hit.object3D.position.copy(pos);
